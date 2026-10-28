@@ -42,6 +42,10 @@ def compose(text: str, local: Callable[[str], str | None]) -> str | None:
     """Пробует собрать перевод из уже известных частей. local(part) -> перевод или None."""
     s = text.strip()
 
+    if len(s) > 2 and s[0] in "[【［" and s[-1] in "]】］":
+        inner = local(s[1:-1].strip())
+        if inner:
+            return inner
     m = re.fullmatch(r"第([一二三四五六七八九十\d]+)阶段", s)
     if m and _num(m.group(1)):
         return f"Этап {_num(m.group(1))}"
@@ -63,7 +67,8 @@ def compose(text: str, local: Callable[[str], str | None]) -> str | None:
     for sep in ("：", ":"):
         if sep in s:
             a, b = s.split(sep, 1)
-            ra, rb = local(a.strip()), local(b.strip()) if b.strip() else ""
+            a = a.strip().strip("[]【】［］ ")
+            ra, rb = local(a), local(b.strip()) if b.strip() else ""
             if ra and rb is not None and (rb or not b.strip()):
                 return f"{ra}: {rb}".rstrip(": ") if rb else f"{ra}:"
     # «已完成 0/2», «星火 x8»

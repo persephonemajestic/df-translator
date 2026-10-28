@@ -375,9 +375,9 @@ def test_questdb_loads_and_matches():
     from dftranslator.questdb import QuestDB, translate_map
 
     db = QuestDB(DATA)
-    assert len(db.quests) == 333
+    assert len([q for q in db.quests if q.dept != "season"]) == 333
     g = Glossary(DATA, None)
-    db.set_names(g.lookup_quest_name)
+    db.set_names(QuestBook(g, None).quest_name)
     q = db.match_name("电站搜寻")
     assert q and q.dept == "combat" and len(q.image_urls()) == 2
     assert q.image_urls()[0].endswith("combat_department_mission/task3_01.webp")
@@ -387,7 +387,7 @@ def test_questdb_loads_and_matches():
     assert "Нулевая плотина (Обычный, Секретно)" == translate_map("零号大坝（常规），零号大坝（机密）")
     items = db.get("combat-41").items()
     assert "Прецизионная карта памяти" in items
-    assert db.search("арбалет") == [] and db.search("Прецизионная")
+    assert [q.id for q in db.search("арбалет")] == ["season-1"] and db.search("Прецизионная")
     # все названия квестов переведены
     assert all(x.name_ru != x.name for x in db.quests), [x.name for x in db.quests if x.name_ru == x.name][:5]
 
@@ -432,3 +432,37 @@ def test_history_and_issue_url():
     assert [e.zh for e in h.entries()] == ["部门", "开始游戏"]
     url = issue_url("o/r", "仓库", "Склад", "Хранилище", "1.0.0")
     assert url.startswith("https://github.com/o/r/issues/new?title=")
+
+
+def test_free_engines_fall_back(monkeypatch):
+    import dftranslator.translate as tr
+
+    class Bad(tr.Engine):
+        def __init__(self, cfg=None):
+            pass
+
+        def translate_batch(self, texts, terms):
+            raise tr.EngineError("429")
+
+    class Good(tr.Engine):
+        def __init__(self, cfg=None):
+            pass
+
+        def translate_batch(self, texts, terms):
+            return [f"RU:{t}" for t in texts]
+
+    monkeypatch.setitem(tr.ENGINES, "google", Bad)
+    monkeypatch.setitem(tr.ENGINES, "microsoft", Good)
+    g = Glossary(DATA, None)
+    t = Translator(g, QuestBook(g, None), {"engine": "google", "engines": {}}, None)
+    res = t.translate(["这是一个完全未知的句子"])
+    assert res[0].ru.startswith("RU:") and t.last_error is None
+    assert t.used_engine == "microsoft"
+
+
+def test_block_lines_and_labels():
+    g = Glossary(DATA, None)
+    t = Translator(g, QuestBook(g, None), {"engine": "google", "engines": {}}, None)
+    assert t.local("[任务环境]：暂无相关情报").ru == "Обстановка: Сведений пока нет"
+    assert t._split_label("[任务简报]：某某某某")[0] == "Брифинг: "
+    assert t.local("临时演员").ru == "Статист"

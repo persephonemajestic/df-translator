@@ -87,7 +87,7 @@ QPushButton#hotkey[bad="true"] {{ border: 1px solid {DANGER}; color: {DANGER}; }
 
 QLineEdit {{ background: #0f141b; border: 1px solid {LINE}; border-radius: {px(8)}px; padding: {px(9)}px {px(12)}px; selection-background-color: {ACCENT}; }}
 QLineEdit:focus {{ border-color: {ACCENT}; }}
-QComboBox {{ background: #0f141b; border: 1px solid {LINE}; border-radius: {px(8)}px; padding: {px(8)}px {px(12)}px; min-width: {px(200)}px; }}
+QComboBox {{ background: #0f141b; border: 1px solid {LINE}; border-radius: {px(8)}px; padding: {px(8)}px {px(12)}px; min-width: {px(150)}px; }}
 QComboBox:hover {{ border-color: #3a4656; }}
 QComboBox::drop-down {{ border: 0; width: {px(26)}px; }}
 QComboBox QAbstractItemView {{ background: {CARD}; border: 1px solid {LINE}; selection-background-color: {ACCENT_DIM}; selection-color: {ACCENT}; outline: 0; }}
@@ -322,7 +322,8 @@ HOTKEY_INFO = [
     ("quit", "Выход", "Закрыть программу"),
 ]
 ENGINE_INFO = [
-    ("google", "Google", "Без ключа. Быстро, но лор знает хуже — опирается на глоссарий."),
+    ("google", "Google", "Без ключа. Если Google ограничит запросы, программа сама переключится на Microsoft."),
+    ("microsoft", "Microsoft", "Без ключа (переводчик из браузера Edge). Запасной вариант для Google."),
     ("deepl", "DeepL", "Нужен ключ DeepL API (free — ключ с «:fx» на конце)."),
     ("claude", "Claude", "Нужен ключ Anthropic. Лучше всего держит лор: глоссарий уходит в запрос."),
 ]
@@ -819,7 +820,8 @@ class SettingsWindow(QWidget):
     def _key_edit(self, path: str, value: str) -> QLineEdit:
         e = QLineEdit(value)
         e.setEchoMode(QLineEdit.EchoMode.Password)
-        e.setMinimumWidth(px(300))
+        e.setMinimumWidth(px(200))
+        e.setMaximumWidth(px(320))
         e.setPlaceholderText("не задан")
         e.textChanged.connect(lambda v: self._set(path, v.strip()))
         return e
@@ -841,7 +843,7 @@ class SettingsWindow(QWidget):
     def _slider_row(self, key: str, path: str, title: str, hint: str, lo: int, hi: int, fmt) -> QWidget:
         sl = QSlider(Qt.Orientation.Horizontal)
         sl.setRange(lo, hi)
-        sl.setMinimumWidth(px(220))
+        sl.setMinimumWidth(px(160))
         val = label("", "value")
         val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.sliders[key] = (sl, val)

@@ -44,6 +44,7 @@ MODE_TITLES = {
 
 ENGINE_TITLES = {
     "google": "Google (без ключа)",
+    "microsoft": "Microsoft (без ключа)",
     "deepl": "DeepL (нужен ключ)",
     "claude": "Claude (нужен ключ, лучше всего по лору)",
 }
@@ -102,7 +103,7 @@ class TranslatorApp:
         self.data_overlay = user_dir / "data"  # свежий словарь с GitHub (см. datasync)
         self.glossary = Glossary(DATA_DIR, user_dir, overlay_dir=self.data_overlay)
         self.quest_db = QuestDB(DATA_DIR, self.data_overlay)
-        self.quest_db.set_names(self.glossary.lookup_quest_name)
+        self.quest_db.set_names(QuestBook(self.glossary, None).quest_name)
         obj_user = user_dir / "objectives_ru.json"
         self.quests = QuestBook(self.glossary, obj_user if obj_user.exists() else None)
         self.quests.add_objectives(self.quest_db.objectives)
@@ -307,7 +308,11 @@ class TranslatorApp:
 
     def _startup_notice(self) -> None:
         if self.just_updated:
-            self.tray.showMessage("DF Translator обновлён", f"Установлена версия {__version__}", QSystemTrayIcon.MessageIcon.Information, 6000)
+            self.tray.showMessage(
+                f"DF Translator обновлён до {__version__}",
+                "Что нового — в панели (клик по значку 译): разделы «Квесты» и «История», "
+                f"гид по квесту {self.cfg['hotkeys']['quest_guide']}.",
+                QSystemTrayIcon.MessageIcon.Information, 8000)
             return
         if not self.start_hidden and not self.hotkeys.errors:
             return
@@ -525,18 +530,28 @@ class TranslatorApp:
             if not blocks:
                 self.bridge.status.emit("Китайский текст не найден", False)
                 return
-            self.bridge.status.emit(f"Перевожу ({len(blocks)})…", False)
-            results = self.translator.translate([b.text for b in blocks])
+            # Если OCR склеил в абзац строки, которые по отдельности есть в словаре
+            # (пункты списка, подписи), переводим их по одной — так точнее.
+            units = []  # (текст, x0, y0, x1, y1, высота строки)
+            for b in blocks:
+                if len(b.lines) > 1 and self.translator.local(b.text) is None \
+                        and any(self.translator.local(ln.text.strip()) for ln in b.lines):
+                    units += [(ln.text.strip(), ln.x0, ln.y0, ln.x1, ln.y1, ln.h) for ln in b.lines]
+                else:
+                    units.append((b.text, b.x0, b.y0, b.x1, b.y1, b.line_h))
+            self.bridge.status.emit(f"Перевожу ({len(units)})…", False)
+            results = self.translator.translate([u[0] for u in units])
             items = [
                 Item(
                     zh=r.zh, ru=r.ru,
-                    x0=b.x0 + dx, y0=b.y0 + dy, x1=b.x1 + dx, y1=b.y1 + dy,
-                    line_h=b.line_h, source=r.source, lore=r.lore,
+                    x0=u[1] + dx, y0=u[2] + dy, x1=u[3] + dx, y1=u[4] + dy,
+                    line_h=u[5], source=r.source, lore=r.lore,
                 )
-                for b, r in zip(blocks, results)
+                for u, r in zip(units, results)
             ]
+            self._last_error = self.translator.last_error
             if self.translator.last_error:
-                self.bridge.status.emit(f"Ошибка перевода: {self.translator.last_error}", True)
+                self.bridge.status.emit(f"Машинный перевод недоступен: {self.translator.last_error}", True)
             self.bridge.results.emit(self._monitor_rect, items)
         except OcrUnavailable as exc:
             self.bridge.status.emit(str(exc), True)
@@ -548,7 +563,9 @@ class TranslatorApp:
     def on_results(self, monitor: QRect, items: list[Item]) -> None:
         mode = self.cfg["display"]["mode"]
         clear_key = self.cfg["hotkeys"]["clear"]
-        if mode == "snapshot":
+        if getattr(self, "_last_error", None):
+            hint = "⚠ Машинный перевод недоступен (интернет/лимит) — показано только из словаря"
+        elif mode == "snapshot":
             hint = "Любая клавиша или клик — закрыть"
         elif mode == "overlay" and self.cfg["display"].get("hide_on_input", True):
             hint = f"Исчезнет после любого нажатия · {clear_key} — убрать сразу"
@@ -694,7 +711,7 @@ class TranslatorApp:
     def on_data_updated(self, changed) -> None:
         self.glossary.reload()
         self.quest_db = QuestDB(DATA_DIR, self.data_overlay)
-        self.quest_db.set_names(self.glossary.lookup_quest_name)
+        self.quest_db.set_names(QuestBook(self.glossary, None).quest_name)
         obj_user = self.user_dir / "objectives_ru.json"
         self.quests = QuestBook(self.glossary, obj_user if obj_user.exists() else None)
         self.quests.add_objectives(self.quest_db.objectives)

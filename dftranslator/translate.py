@@ -65,9 +65,11 @@ class GoogleEngine(Engine):
         params = {"client": "gtx", "sl": "zh-CN", "tl": "ru", "dt": "t"}
         try:
             if len(text) > 700:
-                r = self.session.post(self.URL, params=params, data={"q": text}, timeout=10)
+                r = self.session.post(self.URL, params=params, data={"q": text}, timeout=10, allow_redirects=False)
             else:
-                r = self.session.get(self.URL, params={**params, "q": text}, timeout=10)
+                r = self.session.get(self.URL, params={**params, "q": text}, timeout=10, allow_redirects=False)
+            if r.status_code in (429, 302, 303):  # Google отправляет на /sorry — лимит для этого IP
+                raise EngineError("Google временно ограничил запросы с вашего IP (429)")
             r.raise_for_status()
             return self.parse(r.json())
         except EngineError:
@@ -78,8 +80,61 @@ class GoogleEngine(Engine):
     def translate_batch(self, texts, terms):
         if not self.session:
             raise EngineError("Не установлен пакет requests")
-        with ThreadPoolExecutor(max_workers=min(6, max(1, len(texts)))) as pool:
-            return list(pool.map(self._one, texts))
+        # Одним запросом на весь экран (строки через перевод строки) — так Google реже ограничивает.
+        joined = "\n".join(texts)
+        out = self._one(joined).split("\n")
+        if len(out) == len(texts):
+            return [o.strip() for o in out]
+        return [self._one(t) for t in texts]  # не совпало число строк — по одной, последовательно
+
+
+class MicrosoftEngine(Engine):
+    """Бесплатный переводчик Microsoft (тот же, что встроен в браузер Edge), без ключа."""
+
+    name = "microsoft"
+    AUTH = "https://edge.microsoft.com/translate/auth"
+    URL = "https://api-edge.cognitive.microsofttranslator.com/translate"
+    _token: str = ""
+    _token_ts: float = 0.0
+    _lock = threading.Lock()
+
+    def __init__(self, cfg: dict | None = None):
+        self.session = requests.Session() if requests else None
+        if self.session:
+            self.session.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edg/130.0"
+
+    def _get_token(self) -> str:
+        import time
+
+        with MicrosoftEngine._lock:
+            if not MicrosoftEngine._token or time.time() - MicrosoftEngine._token_ts > 480:
+                r = self.session.get(self.AUTH, timeout=10)
+                r.raise_for_status()
+                MicrosoftEngine._token, MicrosoftEngine._token_ts = r.text.strip(), time.time()
+            return MicrosoftEngine._token
+
+    def translate_batch(self, texts, terms):
+        if not self.session:
+            raise EngineError("Не установлен пакет requests")
+        try:
+            token = self._get_token()
+            out: list[str] = []
+            for i in range(0, len(texts), 50):
+                chunk = texts[i:i + 50]
+                r = self.session.post(
+                    self.URL, params={"from": "zh-Hans", "to": "ru", "api-version": "3.0"},
+                    headers={"Authorization": f"Bearer {token}"},
+                    json=[{"Text": t} for t in chunk], timeout=15,
+                )
+                r.raise_for_status()
+                out += [item["translations"][0]["text"] for item in r.json()]
+        except EngineError:
+            raise
+        except Exception as exc:
+            raise EngineError(f"Microsoft Translator недоступен: {exc}") from exc
+        if len(out) != len(texts):
+            raise EngineError("Microsoft вернул другое число строк")
+        return out
 
 
 class DeepLEngine(Engine):
@@ -182,7 +237,8 @@ class ClaudeEngine(Engine):
         return self.parse_array(content, len(texts))
 
 
-ENGINES = {"google": GoogleEngine, "deepl": DeepLEngine, "claude": ClaudeEngine}
+ENGINES = {"google": GoogleEngine, "microsoft": MicrosoftEngine, "deepl": DeepLEngine, "claude": ClaudeEngine}
+FREE_FALLBACK = {"google": "microsoft", "microsoft": "google"}  # бесплатные движки подстраховывают друг друга
 
 
 def build_engine(name: str, cfg: dict) -> Engine:
@@ -289,6 +345,16 @@ class Translator:
                     return Result(text, head[0] + rest.ru, "template", True)
         return None
 
+    _LABEL_RE = re.compile(r"^[\[【［]?\s*([^\]】］:：]{1,10}?)\s*[\]】］]?\s*[:：]\s*(.+)$")
+
+    def _split_label(self, text: str) -> tuple[str, str] | None:
+        """«[任务简报]：塔马齐格特…» -> («Брифинг: », «塔马齐格特…»), если подпись известна."""
+        m = self._LABEL_RE.match(text)
+        if not m or not has_cjk(m.group(2)):
+            return None
+        hit = self.local(m.group(1), 2)
+        return (hit.ru + ": ", m.group(2)) if hit else None
+
     # -- main entry
     def translate(self, texts: list[str]) -> list[Result]:
         self.last_error = None
@@ -304,8 +370,8 @@ class Translator:
                 results[i] = local
                 continue
             clean = clean_text(raw)
-            head = split_objective_head(clean)
-            if head:  # карта и режим — точно, остальное переводит движок
+            head = split_objective_head(clean) or self._split_label(clean)
+            if head:  # карта и режим / подпись поля — точно, остальное переводит движок
                 prefixes[i] = head[0]
                 clean = head[1]
             cached = self.cache.get(clean)
@@ -333,7 +399,27 @@ class Translator:
         return [r for r in results if r is not None]  # type: ignore[misc]
 
     def _machine(self, cleaned: list[str]) -> list[str]:
-        engine = self._get_engine()
+        import time
+
+        primary = self.engine_name
+        order = [primary] + ([FREE_FALLBACK[primary]] if primary in FREE_FALLBACK else [])
+        # Движок, который недавно упёрся в лимит, на 20 минут пропускаем, чтобы не ждать его каждый раз.
+        skip_until = getattr(self, "_skip_until", {})
+        live = [n for n in order if skip_until.get(n, 0) < time.time()] or order
+        last_exc: EngineError | None = None
+        for name in live:
+            try:
+                engine = self._get_engine() if name == primary else build_engine(name, self.cfg)
+                out = self._run_engine(engine, cleaned)
+                self.used_engine = name
+                return out
+            except EngineError as exc:
+                last_exc = exc
+                skip_until[name] = time.time() + 20 * 60
+                self._skip_until = skip_until
+        raise last_exc or EngineError("Нет доступного движка перевода")
+
+    def _run_engine(self, engine: Engine, cleaned: list[str]) -> list[str]:
         if engine.uses_placeholders:
             protected = [self.g.protect(t) for t in cleaned]
             out = engine.translate_batch([p[0] for p in protected], [])
