@@ -61,6 +61,7 @@ jobs:
           # Qt/onnxruntime иногда падают уже при выгрузке процесса, после того как все тесты прошли,
           # поэтому решение принимаем по отчёту pytest, а не по коду выхода процесса.
           python -m pytest tests -q -rs -p no:faulthandler --junitxml=junit.xml 2>&1 | tee -a ci.log || true
+          set -o pipefail
           python -c "import sys,xml.etree.ElementTree as E;r=E.parse('junit.xml').getroot();s=r if r.tag=='testsuite' else r[0];t,f,e=int(s.get('tests')),int(s.get('failures')),int(s.get('errors'));print('tests',t,'failures',f,'errors',e);sys.exit(0 if t>0 and f==0 and e==0 else 1)" 2>&1 | tee -a ci.log
 
       - name: Иконка
