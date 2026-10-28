@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from .questdb import DEPT_RU, FORCED_RU, TYPE_RU, Quest
-from .settings import FlowLayout, build_qss, card, flow_widget, label, px
+from .settings import ChipLabel, FlowLayout, build_qss, card, flow_widget, label, px
 
 KKRB_HEADERS = {"Referer": "https://www.kkrb.net/", "User-Agent": "Mozilla/5.0 (DFTranslator)"}
 
@@ -225,7 +225,7 @@ class QuestCard(QWidget):
         chips = []
         for text in chip_texts:
             if text:
-                ch = label(text, "chip")
+                ch = ChipLabel(text)
                 chips.append(ch)
         lay.addWidget(flow_widget(chips, px(6)))
 

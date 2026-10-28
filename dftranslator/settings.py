@@ -153,7 +153,10 @@ class FlowLayout(QLayout):
     def minimumSize(self) -> QSize:  # noqa: N802
         s = QSize()
         for it in self._items:
-            s = s.expandedTo(it.minimumSize())
+            m = it.minimumSize()
+            if it.hasHeightForWidth():      # переносимый текст сжимается до разумной ширины
+                m.setWidth(min(m.width(), px(140)))
+            s = s.expandedTo(m)
         m = self.contentsMargins()
         return s + QSize(m.left() + m.right(), m.top() + m.bottom())
 
@@ -166,14 +169,43 @@ class FlowLayout(QLayout):
             if it.widget() is not None and not it.widget().isVisibleTo(it.widget().parentWidget()):
                 continue
             hint = it.sizeHint()
-            w = min(hint.width(), max(1, right - x0 + 1))
+            avail = max(1, right - x0 + 1)
+            w = min(hint.width(), avail)
             if x > x0 and x + w - 1 > right:
                 x, y, line_h = x0, y + line_h + self._sp, 0
+            h = hint.height()
+            if w < hint.width() and it.hasHeightForWidth():   # длинный чип переносится по словам
+                h = max(h, it.heightForWidth(w))
             if not test:
-                it.setGeometry(QRect(x, y, w, hint.height()))
+                it.setGeometry(QRect(x, y, w, h))
             x += w + self._sp
-            line_h = max(line_h, hint.height())
+            line_h = max(line_h, h)
         return y + line_h - r.y() + m.bottom()
+
+
+class ChipLabel(QLabel):
+    """Чип: в одну строку, а если не помещается — переносится по словам."""
+
+    def __init__(self, text: str, name: str = "chip"):
+        super().__init__(text)
+        self.setObjectName(name)
+        self.setWordWrap(True)
+        # невидимый двойник без переноса — даёт естественную ширину в одну строку (с учётом QSS)
+        self._probe = QLabel(text, self)
+        self._probe.setObjectName(name)
+        self._probe.hide()
+
+    def setText(self, text: str) -> None:  # noqa: N802
+        super().setText(text)
+        self._probe.setText(text)
+        self.updateGeometry()
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return self._probe.sizeHint()
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        s = self._probe.sizeHint()
+        return QSize(min(s.width(), px(140)), s.height())
 
 
 def flow_widget(widgets: list, spacing: int | None = None) -> QWidget:
@@ -645,16 +677,11 @@ class SettingsWindow(QWidget):
         sc, lay = page("Главная", "")
         # --- статус
         sc_card, sl = card()
-        top = QHBoxLayout()
-        top.setSpacing(px(12))
-        self.status_label = label("● Готово к работе", "statusOk")
-        top.addWidget(self.status_label)
-        top.addStretch(1)
-        self.chip_mode = label("", "chip")
-        self.chip_engine = label("", "chip")
-        top.addWidget(self.chip_mode)
-        top.addWidget(self.chip_engine)
-        sl.addLayout(top)
+        self.status_label = label("● Готово к работе", "statusOk", wrap=True)
+        sl.addWidget(self.status_label)
+        self.chip_mode = ChipLabel("")
+        self.chip_engine = ChipLabel("")
+        sl.addWidget(flow_widget([self.chip_mode, self.chip_engine], px(6)))
         self.status_sub = label("Нажмите горячую клавишу в игре или карточку ниже — окно скроется на время снимка.", "muted", wrap=True)
         sl.addWidget(self.status_sub)
         lay.addWidget(sc_card)
@@ -694,7 +721,7 @@ class SettingsWindow(QWidget):
         grid.setVerticalSpacing(px(10))
         self.home_keys: dict[str, KeyCaps] = {}
         for i, (name, title, hint) in enumerate(HOTKEY_INFO):
-            lb = label(title, "")
+            lb = label(title, "", wrap=True)
             lb.setToolTip(hint)
             kcp = KeyCaps()
             kcp.setToolTip(hint)
