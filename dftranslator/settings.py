@@ -1185,7 +1185,7 @@ class SettingsWindow(QWidget):
             "Не внедряется в игру и не читает её память — только снимок экрана и отдельное окно. "
             "Гарантий от ACE нет; осторожнее всего — «Отдельная панель» на втором мониторе.", "muted", wrap=True))
         lay.addWidget(c2)
-        lay.addWidget(label("Данные квестов — kkrb.net (Key725).", "muted", wrap=True))
+        lay.addWidget(label("Данные квестов, предметов, ключей и мест — kkrb.net (Key725), с разрешения автора. Спасибо!", "muted", wrap=True))
         lay.addStretch(1)
         return sc
 

@@ -56,4 +56,4 @@
 
 Discord-чат комьюнити или Telegram [@lastnovafuck](https://t.me/lastnovafuck)
 
-<sub>Данные квестов — [kkrb.net](https://www.kkrb.net) (Key725). Неофициальный проект.</sub>
+<sub>Данные квестов, предметов, ключей и мест — [kkrb.net](https://www.kkrb.net) (Key725), используются с разрешения автора. Неофициальный проект.</sub>

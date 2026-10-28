@@ -575,3 +575,17 @@ def test_yandex_engine_and_three_way_fallback(monkeypatch):
     g = Glossary(DATA, None)
     t = Translator(g, QuestBook(g, None), {"engine": "google", "engines": {}}, None)
     assert t.translate(["这是一个完全未知的句子"])[0].ru.startswith("Я:") and t.used_engine == "yandex"
+
+
+def test_kkrb_items_and_composed_names():
+    g = Glossary(DATA, None)
+    t = Translator(g, QuestBook(g, None), {"engine": "google", "engines": {}}, None)
+    assert t.local("QBZ95-1突击步枪").ru == "Штурмовая винтовка QBZ95-1"
+    assert t.local("HA-2重型防弹衣（几乎全新）").ru == "Тяжёлый бронежилет HA-2 (почти новый)"
+    assert t.local("老式钢盔（破损）").ru.endswith("(повреждённый)")
+    assert t.local("蓝室核心 (可透玻璃)").ru == "Ядро Синей комнаты (видно через стекло)"
+    assert t.local("地下金库储藏间 (2)").ru == "Хранилище подземного сейфа (2)"
+    assert t.local("潮汐监狱-医疗实验区").ru == "Приливная тюрьма — Медицинско-экспериментальная зона"
+    assert t.local("阿萨拉牌-黑桃A").ru == "Карты Асары: туз пики"
+    assert t.local("[安全总监]德穆兰").ru.endswith("Демулен")
+    assert t.local("爱的咏叹调-4").ru == "Ария любви — 4"

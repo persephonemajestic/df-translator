@@ -38,6 +38,16 @@ def split_objective_head(text: str) -> tuple[str, str] | None:
     return f"{MAPS[m.group('map')]} · {mode}: ", m.group("rest")
 
 
+_NOTE_RU = {"几乎全新": "почти новый", "破损": "повреждённый", "可透玻璃": "видно через стекло",
+            "可透门玻璃": "видно через стекло двери", "可透窗口": "видно через окно", "非绑定": "не привязан",
+            "军需处兑换": "обмен в интендантской", "新赛季道具": "предмет нового сезона"}
+
+
+def _strip_en(t: str) -> str:
+    """«Нулевая плотина (Zero Dam)» -> «Нулевая плотина»: английское имя в скобках в составных строках лишнее."""
+    return re.sub(r"\s*\([A-Za-z][A-Za-z .'-]*\)$", "", t)
+
+
 def compose(text: str, local: Callable[[str], str | None]) -> str | None:
     """Пробует собрать перевод из уже известных частей. local(part) -> перевод или None."""
     s = text.strip()
@@ -62,6 +72,22 @@ def compose(text: str, local: Callable[[str], str | None]) -> str | None:
     if m and any(m.groups()):
         parts = [f"{v} {u}" for v, u in zip(m.groups(), ("дн.", "ч", "мин")) if v]
         return "Новые заказы через " + " ".join(parts)
+
+    # «HA-2重型防弹衣（几乎全新）» / «(破损)» / «蓝室核心 (可透玻璃)» — известное название + пометка в скобках
+    m = re.fullmatch(r"(.+?)\s*[（(]([^（）()]+)[)）]((?:\s*[（(][^（）()]+[)）])*)", s)
+    if m:
+        base = local(m.group(1).strip())
+        notes = [m.group(2)] + re.findall(r"[（(]([^（）()]+)[)）]", m.group(3) or "")
+        tr = [_NOTE_RU.get(n.strip()) or (n.strip() if n.strip().isdigit() else local(n.strip())) for n in notes]
+        if base and all(tr):
+            return base + "".join(f" ({t})" for t in tr)
+    # «潮汐监狱-医疗实验区» — карта и место
+    if "-" in s and not re.search(r"\d-\d", s):
+        parts = [x.strip() for x in s.split("-")]
+        if len(parts) >= 2 and all(parts):
+            tr = [local(x) for x in parts]
+            if all(tr):
+                return " — ".join(_strip_en(t) for t in tr)
 
     # «A：B» — обе части известны
     for sep in ("：", ":"):
