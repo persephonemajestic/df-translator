@@ -422,7 +422,7 @@ def test_datasync_uses_overlay(tmp_path):
 
 
 def test_history_and_issue_url():
-    from dftranslator.history import History, issue_url
+    from dftranslator.history import History
 
     h = History(limit=2)
     h.add("开始游戏", "Начать игру")
@@ -430,8 +430,29 @@ def test_history_and_issue_url():
     h.add("开始游戏", "Начать игру")
     h.add("部门", "Отделы")
     assert [e.zh for e in h.entries()] == ["部门", "开始游戏"]
-    url = issue_url("o/r", "仓库", "Склад", "Хранилище", "1.0.0")
-    assert url.startswith("https://github.com/o/r/issues/new?title=")
+
+
+def test_community_base_roundtrip(tmp_path):
+    from urllib.parse import parse_qs, urlparse
+
+    from dftranslator.community import make_issue_urls, merge, parse_issue
+
+    pairs = [("仓库", "Склад", "Хранилище"), ("开始游戏", "", "Начать игру")] + \
+            [(f"测试字符串{i}", "", f"Тестовая строка номер {i}") for i in range(400)]
+    urls = make_issue_urls("o/r", pairs, "1.0.0")
+    assert len(urls) > 1 and all(len(u) <= 7200 for u in urls)
+    got = []
+    for u in urls:
+        assert u.startswith("https://github.com/o/r/issues/new?")
+        got += parse_issue(parse_qs(urlparse(u).query)["body"][0])
+    assert len(got) == len(pairs) and got[0] == ("仓库", "Хранилище")
+    # мусор и ссылки не проходят
+    bad = '```dft\n{"zh":"仓库","ru":"<a href=x>"}\n{"zh":"abc","ru":"x"}\nnot json\n{"zh":"部门","ru":"Отделы"}\n```'
+    assert parse_issue(bad) == [("部门", "Отделы")]
+    path = tmp_path / "community.json"
+    assert merge(path, got[:2]) == 2 and merge(path, got[:2]) == 0
+    g = Glossary(DATA, None, overlay_dir=tmp_path)
+    assert g.lookup("仓库").ru == "Хранилище"     # общая база важнее базового глоссария
 
 
 def test_free_engines_fall_back(monkeypatch):
@@ -509,3 +530,48 @@ def test_season_forced_conditions_translate_locally():
     assert r and "за один рейд" in r.ru
     r2 = t.local("在巴克什机密/绝密行动中，前往蓝汀旅店一楼大厅，获取任务物品【雷斯的特别菜单】")
     assert r2 and "«Особое меню Рейса»" in r2.ru
+
+
+def test_yandex_engine_and_three_way_fallback(monkeypatch):
+    import dftranslator.translate as tr
+
+    class Resp:
+        status_code = 200
+
+        def __init__(self, texts):
+            self._t = texts
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"code": 200, "lang": "zh-ru", "text": [f"ЯН:{t}" for t in self._t]}
+
+    eng = tr.YandexEngine()
+    sent = {}
+
+    def post(url, params=None, data=None, timeout=None):
+        sent["params"], sent["data"] = params, data
+        return Resp([v for k, v in data if k == "text"])
+
+    monkeypatch.setattr(eng.session, "post", post)
+    assert eng.translate_batch(["开始游戏", "仓库"], []) == ["ЯН:开始游戏", "ЯН:仓库"]
+    assert ("lang", "zh-ru") in sent["data"] and sent["params"]["srv"] == "android"
+
+    class Bad(tr.Engine):
+        def __init__(self, cfg=None):
+            pass
+
+        def translate_batch(self, texts, terms):
+            raise tr.EngineError("429")
+
+    class Good(Bad):
+        def translate_batch(self, texts, terms):
+            return [f"Я:{t}" for t in texts]
+
+    monkeypatch.setitem(tr.ENGINES, "google", Bad)
+    monkeypatch.setitem(tr.ENGINES, "microsoft", Bad)
+    monkeypatch.setitem(tr.ENGINES, "yandex", Good)
+    g = Glossary(DATA, None)
+    t = Translator(g, QuestBook(g, None), {"engine": "google", "engines": {}}, None)
+    assert t.translate(["这是一个完全未知的句子"])[0].ru.startswith("Я:") and t.used_engine == "yandex"

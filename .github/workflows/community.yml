@@ -1,0 +1,58 @@
+name: Общая база переводов
+
+# Автор пишет в заявке комментарий «/принять» (или ставит метку «принято») —
+# пары «оригинал → перевод» из блока ```dft``` попадают в data/community.json и приходят всем через синхронизацию данных.
+on:
+  issue_comment:
+    types: [created]
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: community
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: >-
+      ${{ (github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/принять') &&
+           contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+          (github.event_name == 'issues' && github.event.label.name == 'принято') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Перенести в базу
+        id: apply
+        run: |
+          python tools/community_apply.py "$GITHUB_EVENT_PATH" result.txt
+          cat result.txt >> "$GITHUB_OUTPUT"
+      - name: Сохранить
+        if: steps.apply.outputs.changed != '0'
+        run: |
+          git config user.name "community-bot"
+          git config user.email "community-bot@users.noreply.github.com"
+          git add data/community.json data/manifest.json
+          git commit -m "Общая база: +${{ steps.apply.outputs.changed }} из заявки #${{ github.event.issue.number }} [skip release]"
+          for i in 1 2 3; do git pull --rebase -q origin main && git push -q origin HEAD:main && break; sleep 5; done
+      - name: Ответить в заявке
+        env:
+          GH_TOKEN: ${{ github.token }}
+          N: ${{ github.event.issue.number }}
+          PAIRS: ${{ steps.apply.outputs.pairs }}
+          CHANGED: ${{ steps.apply.outputs.changed }}
+        run: |
+          if [ "$PAIRS" = "0" ]; then
+            gh issue comment "$N" -R "$GITHUB_REPOSITORY" --body "Не нашёл в заявке строк в формате \`\`\`dft — ничего не добавлено."
+          else
+            gh issue comment "$N" -R "$GITHUB_REPOSITORY" --body "Принято: $CHANGED новых строк в общей базе (всего в заявке $PAIRS). У игроков появится в течение часа, без обновления программы. Спасибо!"
+            gh issue close "$N" -R "$GITHUB_REPOSITORY"
+          fi

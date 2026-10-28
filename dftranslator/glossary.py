@@ -61,8 +61,10 @@ class Glossary:
         base = _load_json(self._path("glossary.json"))
         names = _load_json(self._path("quest_names.json"))
         user = _load_json(self.user_dir / "glossary_user.json") if self.user_dir else {}
+        community = _load_json(self._path("community.json")) if self._path("community.json").exists() else {}
 
-        for source in (base, user):  # пользовательские правки перекрывают базовые
+        # приоритет: базовый глоссарий < общая база сообщества < личные правки
+        for source in (base, community, user):
             for cat in EXACT_CATEGORIES:
                 for zh, ru in (source.get(cat) or {}).items():
                     self._add(cat, zh, ru)

@@ -18,7 +18,8 @@ from PySide6.QtGui import QAction, QColor, QDesktopServices, QFont, QIcon, QLine
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon  # noqa: E402
 
 from . import CREDIT, __version__, capture, datasync, inputwatch, updater  # noqa: E402
-from .history import History, issue_url  # noqa: E402
+from .community import make_issue_urls, valid_pair  # noqa: E402
+from .history import History  # noqa: E402
 from .questdb import QuestDB  # noqa: E402
 from .blocks import group_blocks  # noqa: E402
 from .config import _merge, config_dir, load_config, save_config  # noqa: E402
@@ -45,6 +46,7 @@ MODE_TITLES = {
 ENGINE_TITLES = {
     "google": "Google (без ключа)",
     "microsoft": "Microsoft (без ключа)",
+    "yandex": "Яндекс (без ключа)",
     "deepl": "DeepL (нужен ключ)",
     "claude": "Claude (нужен ключ, лучше всего по лору)",
 }
@@ -151,6 +153,7 @@ class TranslatorApp:
         self.bridge.test_done.connect(self.settings.set_test_result)
         self.settings.open_quest.connect(self.open_quest)
         self.settings.history_fix.connect(self.on_history_fix)
+        self.settings.share_all.connect(self.on_share_all)
         self.settings.history_clear.connect(self.on_history_clear)
         from .progress import Progress
         from .questui import ImageLoader, QuestBrowser
@@ -683,7 +686,32 @@ class TranslatorApp:
         self.history.add(zh, ru, "glossary", True)
         self.settings.refresh_history()
         if send:
-            QDesktopServices.openUrl(QUrl(issue_url(self.cfg["updates"].get("repo", ""), zh, old, ru, __version__)))
+            for url in make_issue_urls(self.cfg["updates"].get("repo", ""), [(zh, old, ru)], __version__):
+                QDesktopServices.openUrl(QUrl(url))
+
+    def on_share_all(self) -> None:
+        """Все личные правки — одной (или несколькими) заявками в общую базу."""
+        path = self.user_dir / "glossary_user.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        except (OSError, ValueError):
+            data = {}
+        pairs = []
+        for section, mapping in data.items():
+            if section.startswith("_") or not isinstance(mapping, dict):
+                continue
+            for zh, ru in mapping.items():
+                if isinstance(ru, str) and valid_pair(zh, ru):
+                    base = self.glossary.lookup(zh)
+                    pairs.append((zh, base.ru if base else "", ru))
+        if not pairs:
+            self.settings.h_note.setText("Личных правок пока нет — исправьте перевод в списке выше")
+            return
+        urls = make_issue_urls(self.cfg["updates"].get("repo", ""), pairs, __version__)
+        for url in urls:
+            QDesktopServices.openUrl(QUrl(url))
+        self.settings.h_note.setText(f"Откроется заявок: {len(urls)} ({len(pairs)} строк). "
+                                     "Нажмите там «Submit new issue» — после проверки правки получат все.")
 
     def on_history_clear(self) -> None:
         self.history.clear()

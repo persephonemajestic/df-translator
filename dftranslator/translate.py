@@ -137,6 +137,46 @@ class MicrosoftEngine(Engine):
         return out
 
 
+class YandexEngine(Engine):
+    """Бесплатный Яндекс Переводчик (адрес мобильного приложения), без ключа. Для русского часто звучит естественнее."""
+
+    name = "yandex"
+    URL = "https://translate.yandex.net/api/v1/tr.json/translate"
+
+    def __init__(self, cfg: dict | None = None):
+        import uuid
+
+        self.session = requests.Session() if requests else None
+        if self.session:
+            self.session.headers["User-Agent"] = "ru.yandex.translate/24.10.1 (Android 14)"
+        self.ucid = uuid.uuid4().hex
+
+    def translate_batch(self, texts, terms):
+        if not self.session:
+            raise EngineError("Не установлен пакет requests")
+        out: list[str] = []
+        try:
+            for i in range(0, len(texts), 40):
+                chunk = texts[i:i + 40]
+                data = [("lang", "zh-ru")] + [("text", t) for t in chunk]
+                r = self.session.post(self.URL, params={"ucid": self.ucid, "srv": "android", "format": "text"},
+                                      data=data, timeout=15)
+                if r.status_code == 429:
+                    raise EngineError("Яндекс временно ограничил запросы (429)")
+                r.raise_for_status()
+                js = r.json()
+                if js.get("code") != 200:
+                    raise EngineError(f"Яндекс: код {js.get('code')} {js.get('message', '')}".strip())
+                out += list(js.get("text") or [])
+        except EngineError:
+            raise
+        except Exception as exc:
+            raise EngineError(f"Яндекс Переводчик недоступен: {exc}") from exc
+        if len(out) != len(texts):
+            raise EngineError("Яндекс вернул другое число строк")
+        return out
+
+
 class DeepLEngine(Engine):
     name = "deepl"
 
@@ -237,8 +277,11 @@ class ClaudeEngine(Engine):
         return self.parse_array(content, len(texts))
 
 
-ENGINES = {"google": GoogleEngine, "microsoft": MicrosoftEngine, "deepl": DeepLEngine, "claude": ClaudeEngine}
-FREE_FALLBACK = {"google": "microsoft", "microsoft": "google"}  # бесплатные движки подстраховывают друг друга
+ENGINES = {"google": GoogleEngine, "microsoft": MicrosoftEngine, "yandex": YandexEngine,
+           "deepl": DeepLEngine, "claude": ClaudeEngine}
+# Бесплатные движки подстраховывают друг друга: если основной упёрся в лимит, пробуем следующие по очереди.
+FREE_ENGINES = ["google", "microsoft", "yandex"]
+FREE_FALLBACK = {n: [m for m in FREE_ENGINES if m != n] for n in FREE_ENGINES}
 
 
 def build_engine(name: str, cfg: dict) -> Engine:
@@ -402,7 +445,7 @@ class Translator:
         import time
 
         primary = self.engine_name
-        order = [primary] + ([FREE_FALLBACK[primary]] if primary in FREE_FALLBACK else [])
+        order = [primary] + FREE_FALLBACK.get(primary, [])
         # Движок, который недавно упёрся в лимит, на 20 минут пропускаем, чтобы не ждать его каждый раз.
         skip_until = getattr(self, "_skip_until", {})
         live = [n for n in order if skip_until.get(n, 0) < time.time()] or order

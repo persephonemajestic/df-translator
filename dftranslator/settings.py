@@ -461,8 +461,9 @@ HOTKEY_INFO = [
     ("quit", "Выход", "Закрыть программу"),
 ]
 ENGINE_INFO = [
-    ("google", "Google", "Без ключа. Если Google ограничит запросы, программа сама переключится на Microsoft."),
+    ("google", "Google", "Без ключа. Если Google ограничит запросы, программа сама переключится на Microsoft или Яндекс."),
     ("microsoft", "Microsoft", "Без ключа (переводчик из браузера Edge). Запасной вариант для Google."),
+    ("yandex", "Яндекс", "Без ключа. Часто звучит естественнее по-русски; третий запасной вариант."),
     ("deepl", "DeepL", "Нужен ключ DeepL API (free — ключ с «:fx» на конце)."),
     ("claude", "Claude", "Нужен ключ Anthropic. Лучше всего держит лор: глоссарий уходит в запрос."),
 ]
@@ -479,6 +480,7 @@ class SettingsWindow(QWidget):
     open_quest = Signal(str)           # id квеста
     history_fix = Signal(str, str, bool)  # оригинал, новый перевод, отправить автору
     history_clear = Signal()
+    share_all = Signal()               # отправить все личные правки в общую базу
 
     def __init__(self, cfg: dict, icon):
         super().__init__()
@@ -802,7 +804,7 @@ class SettingsWindow(QWidget):
             lb.setText(text.format(**{k: fmt(v) for k, v in hk.items()}))
         self.chip_mode.setText({"snapshot": "Безопасный режим", "panel": "Отдельная панель",
                                 "overlay": "Поверх игры"}.get(self.cfg["display"]["mode"], ""))
-        eng = {"google": "Google", "deepl": "DeepL", "claude": "Claude"}.get(self.cfg["engine"], self.cfg["engine"])
+        eng = {"google": "Google", "microsoft": "Microsoft", "yandex": "Яндекс", "deepl": "DeepL", "claude": "Claude"}.get(self.cfg["engine"], self.cfg["engine"])
         self.chip_engine.setText(f"Движок: {eng}")
 
     def set_hotkey_status(self, errors: list[str]) -> None:
@@ -846,8 +848,9 @@ class SettingsWindow(QWidget):
 
     # ------------------------------------------------------------ история
     def _page_history(self) -> QWidget:
-        sc, lay = page("История", "Последние переводы. Если перевод неверный — нажмите «Исправить»: "
-                                  "правка сразу заработает у вас и, по желанию, уйдёт автору для всех.")
+        sc, lay = page("История", "Последние переводы. Если перевод неверный — впишите правильный и нажмите «Исправить»: "
+                                  "правка сразу заработает у вас, а «отправить автору» добавит её в общую базу для всех "
+                                  "(нужен аккаунт GitHub).")
         self.h_list = QListWidget()
         self.h_list.setObjectName("hlist")
         self.h_list.setStyleSheet(
@@ -874,7 +877,10 @@ class SettingsWindow(QWidget):
         fix_all.clicked.connect(lambda: self._history_fix(True))
         clear = QPushButton("Очистить")
         clear.clicked.connect(self.history_clear.emit)
-        lay.addWidget(flow_widget([copy_btn, fix_me, fix_all, clear]))
+        share = QPushButton("Поделиться всеми правками")
+        share.setToolTip("Все ваши исправления — одной заявкой в общую базу. После проверки автором они придут всем")
+        share.clicked.connect(self.share_all.emit)
+        lay.addWidget(flow_widget([copy_btn, fix_me, fix_all, share, clear]))
         self.h_note = label("", "muted", wrap=True)
         lay.addWidget(self.h_note)
         return sc
