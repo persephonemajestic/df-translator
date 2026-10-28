@@ -78,7 +78,7 @@ QPushButton#action:hover {{ border-color: {ACCENT}; background: #19212b; }}
 QPushButton#engine {{ text-align: left; padding: {px(14)}px {px(16)}px; border-radius: {px(12)}px; background: {CARD}; }}
 QPushButton#engine:hover {{ border-color: #3a4656; }}
 QPushButton#engine:checked {{ border: 1px solid {ACCENT}; background: {ACCENT_DIM}; }}
-QPushButton#seg {{ border-radius: 0; padding: {px(9)}px {px(16)}px; min-width: {px(104)}px; background: {CARD}; }}
+QPushButton#seg {{ border-radius: 0; padding: {px(9)}px {px(12)}px; min-width: {px(78)}px; background: {CARD}; }}
 QPushButton#seg:checked {{ background: {ACCENT}; color: #06231a; font-weight: 700; border-color: {ACCENT}; }}
 QPushButton#hotkey {{ font-family: Consolas, "Cascadia Mono", monospace; font-weight: 600; min-width: {px(170)}px; padding: {px(8)}px {px(14)}px; background: #0f141b; }}
 QPushButton#hotkey:hover {{ border-color: #3a4656; }}

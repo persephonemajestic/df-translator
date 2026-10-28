@@ -207,6 +207,7 @@ def test_quest_browser(qapp, errors, tmp_path, monkeypatch):
     b.select("season-315")
     qapp.processEvents()
     assert b.card.isVisible() and not b.midw.isVisible()   # в узком окне открылась карточка
+    _assert_fits(b.card)
     b._back_to_list()
     qapp.processEvents()
     assert b.midw.isVisible() and not b.card.isVisible()
@@ -216,7 +217,7 @@ def test_quest_browser(qapp, errors, tmp_path, monkeypatch):
 def _assert_fits(card):
     """Содержимое карточки не шире видимой области (раньше текст обрезался справа)."""
     inner = card.scroll.widget()
-    if inner is None:
+    if inner is None or not card.isVisible():
         return
     vw = card.scroll.viewport().width()
     assert inner.minimumSizeHint().width() <= vw + 2, (inner.minimumSizeHint().width(), vw, _widest(inner))

@@ -208,15 +208,18 @@ class QuestCard(QWidget):
             back.clicked.connect(self.on_back)
             head.addWidget(back, 0, Qt.AlignmentFlag.AlignTop)
         head.addWidget(plain(quest.name_ru or quest.name, "h1"), 1)
+        done_btn = None
         if self.progress is not None:
             done = self.progress.is_done(quest.id)
-            btn = QPushButton(("✓ Выполнено" if done else "✓ Выполнил") if self.width() < px(520)
-                              else ("✓ Выполнено" if done else "Отметить выполненным"))
-            btn.setObjectName("" if done else "primary")
-            btn.setToolTip("Выполненные задания скрываются из списка (их можно показать переключателем)")
-            btn.clicked.connect(lambda _=False, q=quest: self._toggle_done(q))
-            head.addWidget(btn, 0, Qt.AlignmentFlag.AlignTop)
+            done_btn = QPushButton("✓ Выполнено" if done else "Отметить выполненным")
+            done_btn.setObjectName("" if done else "primary")
+            done_btn.setToolTip("Выполненные задания скрываются из списка (их можно показать переключателем)")
+            done_btn.clicked.connect(lambda _=False, q=quest: self._toggle_done(q))
+            if not narrow:
+                head.addWidget(done_btn, 0, Qt.AlignmentFlag.AlignTop)
         lay.addLayout(head)
+        if done_btn is not None and narrow:   # в узком окне кнопка — отдельной строкой под названием
+            lay.addWidget(done_btn, 0, Qt.AlignmentFlag.AlignLeft)
         lay.addWidget(plain(quest.name, "muted"))
         chip_texts = [DEPT_RU.get(quest.dept, quest.dept)]
         if quest.dept == "season" and quest.line:
