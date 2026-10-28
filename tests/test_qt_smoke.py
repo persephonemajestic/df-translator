@@ -219,7 +219,19 @@ def _assert_fits(card):
     if inner is None:
         return
     vw = card.scroll.viewport().width()
-    assert inner.minimumSizeHint().width() <= vw + 2, (inner.minimumSizeHint().width(), vw)
+    assert inner.minimumSizeHint().width() <= vw + 2, (inner.minimumSizeHint().width(), vw, _widest(inner))
+
+
+def _widest(root, n=4):
+    """Какие виджеты шире всего (для понятного сообщения об ошибке)."""
+    from PySide6.QtWidgets import QAbstractButton, QLabel, QWidget
+
+    rows = []
+    for ch in root.findChildren(QWidget):
+        if ch.isVisibleTo(root):
+            text = ch.text() if isinstance(ch, (QLabel, QAbstractButton)) else ""
+            rows.append((ch.minimumSizeHint().width(), type(ch).__name__, ch.objectName(), text[:40]))
+    return sorted(rows, reverse=True)[:n]
 
 
 def test_settings_window_small_sizes(qapp, errors, tmp_path, monkeypatch):
@@ -257,7 +269,8 @@ def test_settings_window_small_sizes(qapp, errors, tmp_path, monkeypatch):
             page = w.stack.currentWidget()
             if isinstance(page, QScrollArea) and page.widget() is not None:
                 need = page.widget().minimumSizeHint().width()
-                assert need <= page.viewport().width() + 2, (size, w.nav_texts[i], need, page.viewport().width())
+                assert need <= page.viewport().width() + 2, (size, w.nav_texts[i], need, page.viewport().width(),
+                                                             _widest(page.widget()))
         b.select("season-207")
         qapp.processEvents()
         if b.card.isVisible():

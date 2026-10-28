@@ -186,6 +186,36 @@ def flow_widget(widgets: list, spacing: int | None = None) -> QWidget:
     return w
 
 
+class WrapButton(QPushButton):
+    """Кнопка с заголовком и переносимым описанием: не распирает окно длинным текстом."""
+
+    def __init__(self, title: str, desc: str):
+        super().__init__()
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(px(16), px(12), px(16), px(12))
+        lay.setSpacing(px(2))
+        for text, name in ((title, "h2"), (desc, "muted")):
+            lb = label(text, name, wrap=True)
+            lb.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            lb.setStyleSheet("background: transparent;")
+            lay.addWidget(lb)
+        sp = self.sizePolicy()
+        sp.setHeightForWidth(True)
+        self.setSizePolicy(sp)
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return self.layout().sizeHint()
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return self.layout().minimumSize()
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802
+        return True
+
+    def heightForWidth(self, w: int) -> int:  # noqa: N802
+        return self.layout().totalHeightForWidth(w)
+
+
 class Switch(QAbstractButton):
     def __init__(self, checked: bool = False):
         super().__init__()
@@ -884,7 +914,7 @@ class SettingsWindow(QWidget):
         self.engine_btns: dict[str, QPushButton] = {}
         grp = QButtonGroup(self)
         for key, title, desc in ENGINE_INFO:
-            b = QPushButton(f"{title}\n{desc}")
+            b = WrapButton(title, desc)
             b.setObjectName("engine")
             b.setCheckable(True)
             b.setCursor(Qt.CursorShape.PointingHandCursor)

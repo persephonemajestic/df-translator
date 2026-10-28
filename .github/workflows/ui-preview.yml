@@ -23,6 +23,7 @@ jobs:
       - name: Тесты окон
         env:
           QT_QPA_PLATFORM: offscreen
+          QT_QPA_FONTDIR: C:\Windows\Fonts
         shell: bash
         run: |
           python -m pytest tests -q -rs -p no:faulthandler -k "not full_app and not ocr" --junitxml=junit.xml 2>&1 | tee test.log || true
@@ -30,6 +31,7 @@ jobs:
       - name: Снимки
         env:
           QT_QPA_PLATFORM: offscreen
+          QT_QPA_FONTDIR: C:\Windows\Fonts
         shell: bash
         run: python tools/ui_shots.py shots 2>&1 | tee -a test.log || true
       - name: Опубликовать снимки

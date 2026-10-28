@@ -225,7 +225,7 @@ class QuestCard(QWidget):
         chips = []
         for text in chip_texts:
             if text:
-                ch = label(text, "chip", wrap=True)
+                ch = label(text, "chip")
                 chips.append(ch)
         lay.addWidget(flow_widget(chips, px(6)))
 

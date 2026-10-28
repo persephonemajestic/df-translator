@@ -57,6 +57,7 @@ jobs:
       - name: Тесты (логика, окна Qt, OCR, запуск программы)
         env:
           QT_QPA_PLATFORM: offscreen
+          QT_QPA_FONTDIR: C:\Windows\Fonts
         shell: bash
         run: |
           # Qt/onnxruntime иногда падают уже при выгрузке процесса, после того как все тесты прошли,
