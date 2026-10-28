@@ -68,16 +68,39 @@ def exe_path() -> Path:
     return Path(sys.executable)
 
 
+def tag_from_location(location: str) -> str | None:
+    """'https://github.com/o/r/releases/tag/v1.0.2' -> '1.0.2'."""
+    m = re.search(r"/releases/tag/v?([^/?#]+)", location or "")
+    return m.group(1) if m else None
+
+
 def fetch_latest(repo: str) -> ReleaseInfo | None:
-    r = requests.get(
-        API.format(repo=repo),
-        headers={"Accept": "application/vnd.github+json", "User-Agent": UA},
-        timeout=15,
-    )
-    if r.status_code == 404:
+    """Узнаёт последнюю версию без GitHub API (у API лимит 60 запросов в час на IP — у провайдеров
+    с общим IP он быстро кончается). Используются обычные ссылки github.com, у них такого лимита нет."""
+    headers = {"User-Agent": UA}
+    r = requests.get(f"https://github.com/{repo}/releases/latest", headers=headers, allow_redirects=False, timeout=15)
+    if r.status_code in (301, 302, 303, 307, 308):
+        version = tag_from_location(r.headers.get("Location", ""))
+    elif r.status_code == 404:
         return None  # релизов ещё нет
-    r.raise_for_status()
-    return parse_release(r.json())
+    else:
+        r.raise_for_status()
+        version = None
+    if not version:
+        return None
+    url = f"https://github.com/{repo}/releases/download/v{version}/{ASSET_NAME}"
+    head = requests.head(url, headers=headers, allow_redirects=True, timeout=15)
+    if head.status_code != 200:
+        return None  # релиз создан, но exe ещё собирается
+    notes = ""
+    try:
+        n = requests.get(f"https://raw.githubusercontent.com/{repo}/v{version}/RELEASE_NOTES.md", headers=headers, timeout=10)
+        if n.status_code == 200:
+            notes = n.text.strip()
+    except requests.RequestException:
+        pass
+    size = int(head.headers.get("Content-Length") or 0)
+    return ReleaseInfo(version=version, notes=notes, url=url, size=size, sha256=None)
 
 
 def download(info: ReleaseInfo, target: Path, progress: Callable[[float], None] | None = None) -> Path:
@@ -100,6 +123,10 @@ def download(info: ReleaseInfo, target: Path, progress: Callable[[float], None] 
     if tmp.stat().st_size < 5_000_000:
         tmp.unlink(missing_ok=True)
         raise RuntimeError("Скачанный файл слишком мал — похоже на ошибку")
+    with tmp.open("rb") as f:
+        if f.read(2) != b"MZ":  # заголовок любого Windows-exe
+            tmp.unlink(missing_ok=True)
+            raise RuntimeError("Скачанный файл не похож на программу")
     os.replace(tmp, target)
     return target
 

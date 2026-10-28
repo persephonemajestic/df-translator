@@ -363,3 +363,10 @@ def test_screen_strings_from_real_game():
         assert r and r.ru == ru, (zh, r)
     head = split_objective_head("在巴克什机密/绝密行动中，前往阿萨拉集市民房区域，获取任务物品手作笨弩")
     assert head == ("Браккеш · Секретно / Совсекретно: ", "前往阿萨拉集市民房区域，获取任务物品手作笨弩")
+
+
+def test_updater_tag_from_redirect():
+    from dftranslator.updater import tag_from_location
+
+    assert tag_from_location("https://github.com/a/b/releases/tag/v1.0.2") == "1.0.2"
+    assert tag_from_location("https://github.com/a/b/releases") is None

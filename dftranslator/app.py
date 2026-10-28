@@ -256,8 +256,11 @@ class TranslatorApp:
         try:
             updater.apply_update(self.pending_update)
         except Exception as exc:  # noqa: BLE001
-            self.pending_update = None
-            self._emit_update(f"Не удалось установить: {exc}", "bad")
+            # Чаще всего файл программы держит открытым античит игры — повторим позже, когда игру закроют.
+            self._apply_failures = getattr(self, "_apply_failures", 0) + 1
+            self._emit_update(
+                f"Пока не получилось заменить файл (его держит другая программа, обычно игра). "
+                f"Повторю позже сам. ({exc})", "bad", can_install=True)
             return
         self.qt.quit()
 
