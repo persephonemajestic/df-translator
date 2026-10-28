@@ -181,7 +181,7 @@ def test_quest_browser(qapp, errors, tmp_path, monkeypatch):
             b.set_section(key)
             qapp.processEvents()
             b.grab()
-    b.select("season-5")
+    b.select("season-207")
     assert b.section == "season:2"
     progress.set_many([q.id for q in db.season_line("1-3")], True)
     b.set_section("season:1")
@@ -196,4 +196,85 @@ def test_quest_browser(qapp, errors, tmp_path, monkeypatch):
     qapp.processEvents()
     b.select("combat-3")
     b.card.grab()
+    # раскладка под ширину: три колонки -> выпадающий список -> список ИЛИ карточка
+    b.search.clear()
+    for w, mode in ((1300, "wide"), (800, "split"), (420, "narrow")):
+        b.resize(w, 600)
+        qapp.processEvents()
+        assert b._mode == mode, (w, b._mode)
+        _assert_fits(b.card)
+    assert b.combo.isVisible() and not b.rail_scroll.isVisible()
+    b.select("season-315")
+    qapp.processEvents()
+    assert b.card.isVisible() and not b.midw.isVisible()   # в узком окне открылась карточка
+    _assert_fits(b.card)
+    b._back_to_list()
+    qapp.processEvents()
+    assert b.midw.isVisible() and not b.card.isVisible()
+    assert not errors, errors
+
+
+def _assert_fits(card):
+    """Содержимое карточки не шире видимой области (раньше текст обрезался справа)."""
+    inner = card.scroll.widget()
+    if inner is None or not card.isVisible():
+        return
+    vw = card.scroll.viewport().width()
+    assert inner.minimumSizeHint().width() <= vw + 2, (inner.minimumSizeHint().width(), vw, _widest(inner))
+
+
+def _widest(root, n=4):
+    """Какие виджеты шире всего (для понятного сообщения об ошибке)."""
+    from PySide6.QtWidgets import QAbstractButton, QLabel, QWidget
+
+    rows = []
+    for ch in root.findChildren(QWidget):
+        if ch.isVisibleTo(root):
+            text = ch.text() if isinstance(ch, (QLabel, QAbstractButton)) else ""
+            rows.append((ch.minimumSizeHint().width(), type(ch).__name__, ch.objectName(), text[:40]))
+    return sorted(rows, reverse=True)[:n]
+
+
+def test_settings_window_small_sizes(qapp, errors, tmp_path, monkeypatch):
+    from PySide6.QtGui import QIcon
+    from PySide6.QtWidgets import QScrollArea
+
+    from dftranslator.config import DEFAULTS
+    from dftranslator.glossary import Glossary
+    from dftranslator.progress import Progress
+    from dftranslator.questdb import QuestDB
+    from dftranslator.quests import QuestBook
+    from dftranslator.questui import ImageLoader, QuestBrowser
+    from dftranslator.settings import SettingsWindow, detect_scale
+
+    detect_scale()
+    w = SettingsWindow(copy.deepcopy(DEFAULTS), QIcon())
+    g = Glossary(DATA, None)
+    book = QuestBook(g, None)
+    db = QuestDB(DATA)
+    db.set_names(book.quest_name)
+    loader = ImageLoader(tmp_path / "img")
+    monkeypatch.setattr(loader, "request", lambda url: None)
+    b = QuestBrowser(QIcon(), loader, book.reward, Progress(tmp_path / "p.json"))
+    b.name_lookup = book.quest_name
+    b.set_db(db)
+    w.install_quest_browser(b)
+    w.show()
+    for size in ((1240, 780), (1110, 810), (820, 600), (560, 440)):
+        w.resize(*size)
+        qapp.processEvents()
+        assert w.width() <= size[0] + 1, (size, w.width())   # окно действительно можно сделать таким
+        for i in range(w.nav.count()):
+            w.nav.setCurrentRow(i)
+            qapp.processEvents()
+            page = w.stack.currentWidget()
+            if isinstance(page, QScrollArea) and page.widget() is not None:
+                need = page.widget().minimumSizeHint().width()
+                assert need <= page.viewport().width() + 2, (size, w.nav_texts[i], need, page.viewport().width(),
+                                                             _widest(page.widget()))
+        b.select("season-207")
+        qapp.processEvents()
+        if b.card.isVisible():
+            _assert_fits(b.card)
+    assert w.side.width() < 100   # в маленьком окне меню свёрнуто в значки
     assert not errors, errors

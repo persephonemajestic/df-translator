@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from .questdb import DEPT_RU, FORCED_RU, TYPE_RU, Quest
-from .settings import build_qss, card, label, px
+from .settings import ChipLabel, FlowLayout, build_qss, card, flow_widget, label, px
 
 KKRB_HEADERS = {"Referer": "https://www.kkrb.net/", "User-Agent": "Mozilla/5.0 (DFTranslator)"}
 
@@ -176,6 +176,8 @@ class QuestCard(QWidget):
         self.children = children
         self.viewer = ImageViewer(loader, icon)
         self.quest: Quest | None = None
+        self.show_back = False                       # кнопка «←» к списку (узкое окно справочника)
+        self.on_back: Callable[[], None] | None = None
         self._thumbs: dict[str, ClickLabel] = {}
         loader.loaded.connect(self._on_loaded)
         loader.failed.connect(self._on_failed)
@@ -194,30 +196,44 @@ class QuestCard(QWidget):
         inner = QWidget()
         inner.setObjectName("content")
         lay = QVBoxLayout(inner)
-        lay.setContentsMargins(px(28), px(24), px(28), px(24))
-        lay.setSpacing(px(14))
+        narrow = self.width() < px(520)
+        lay.setContentsMargins(px(14) if narrow else px(28), px(16) if narrow else px(24),
+                               px(14) if narrow else px(28), px(16) if narrow else px(24))
+        lay.setSpacing(px(12) if narrow else px(14))
 
         head = QHBoxLayout()
+        if self.show_back and self.on_back is not None:
+            back = QPushButton("←")
+            back.setToolTip("К списку заданий")
+            back.clicked.connect(self.on_back)
+            head.addWidget(back, 0, Qt.AlignmentFlag.AlignTop)
         head.addWidget(plain(quest.name_ru or quest.name, "h1"), 1)
+        done_btn = None
         if self.progress is not None:
             done = self.progress.is_done(quest.id)
-            btn = QPushButton("✓ Выполнено" if done else "Отметить выполненным")
-            btn.setObjectName("" if done else "primary")
-            btn.setToolTip("Выполненные задания скрываются из списка (их можно показать переключателем)")
-            btn.clicked.connect(lambda _=False, q=quest: self._toggle_done(q))
-            head.addWidget(btn, 0, Qt.AlignmentFlag.AlignTop)
+            done_btn = QPushButton("✓ Выполнено" if done else "Отметить выполненным")
+            done_btn.setObjectName("" if done else "primary")
+            done_btn.setToolTip("Выполненные задания скрываются из списка (их можно показать переключателем)")
+            done_btn.clicked.connect(lambda _=False, q=quest: self._toggle_done(q))
+            if not narrow:
+                head.addWidget(done_btn, 0, Qt.AlignmentFlag.AlignTop)
         lay.addLayout(head)
+        if done_btn is not None and narrow:   # в узком окне кнопка — отдельной строкой под названием
+            lay.addWidget(done_btn, 0, Qt.AlignmentFlag.AlignLeft)
         lay.addWidget(plain(quest.name, "muted"))
-        chips = QHBoxLayout()
-        chips.setSpacing(px(6))
-        for text in (DEPT_RU.get(quest.dept, quest.dept), TYPE_RU.get(quest.qtype, quest.qtype), quest.map_ru()):
+        chip_texts = [DEPT_RU.get(quest.dept, quest.dept)]
+        if quest.dept == "season" and quest.line:
+            chip_texts.append("Основная линия" if quest.line == "main" else f"Ветка {quest.line}")
+        chip_texts += [TYPE_RU.get(quest.qtype, quest.qtype), quest.map_ru()]
+        chips = []
+        for text in chip_texts:
             if text:
-                chips.addWidget(label(text, "chip"))
-        chips.addStretch(1)
-        lay.addLayout(chips)
+                ch = ChipLabel(text)
+                chips.append(ch)
+        lay.addWidget(flow_widget(chips, px(6)))
 
         if quest.forced:
-            warn = plain("⚠ " + FORCED_RU.get(quest.forced, quest.forced), "bad")
+            warn = plain("⚠ " + quest.forced_text(), "bad")
             lay.addWidget(warn)
 
         c, cl = card()
@@ -256,8 +272,7 @@ class QuestCard(QWidget):
         c4l.addWidget(label("Где выполнять", "h2"))
         urls = quest.image_urls()
         if urls:
-            grid = QGridLayout()
-            grid.setSpacing(px(8))
+            thumbs = []
             for i, url in enumerate(urls):
                 th = ClickLabel("…")
                 th.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -267,28 +282,28 @@ class QuestCard(QWidget):
                 th.setToolTip("Открыть крупно")
                 th.clicked.connect(lambda i=i, urls=urls: self.viewer.open(urls, i))
                 self._thumbs[url] = th
-                grid.addWidget(th, i // 3, i % 3)
+                thumbs.append(th)
                 self.loader.request(url)
-            c4l.addLayout(grid)
+            c4l.addWidget(flow_widget(thumbs))
             c4l.addWidget(label("Скриншоты: kkrb.net (Key725)", "muted"))
         else:
             c4l.addWidget(label("Скриншотов для этого задания нет — ориентируйтесь по описанию целей.", "muted", wrap=True))
         lay.addWidget(c4)
 
-        nav = QHBoxLayout()
+        nav = []
         parent = self.get_quest(f"{quest.dept}-{quest.parent}") if quest.parent else None
         if parent:
             b = QPushButton(f"← {parent.name_ru or parent.name}")
             b.setToolTip("Предыдущее задание цепочки")
             b.clicked.connect(lambda _=False, p=parent: self._go(p))
-            nav.addWidget(b)
-        nav.addStretch(1)
+            nav.append(b)
         for child in self.children(quest)[:3]:
             b = QPushButton(f"{child.name_ru or child.name} →")
             b.setToolTip("Следующее задание")
             b.clicked.connect(lambda _=False, ch=child: self._go(ch))
-            nav.addWidget(b)
-        lay.addLayout(nav)
+            nav.append(b)
+        if nav:
+            lay.addWidget(flow_widget(nav))
         lay.addStretch(1)
 
         self.scroll.setWidget(inner)
@@ -297,6 +312,13 @@ class QuestCard(QWidget):
             self.show()
             self.raise_()
             self.activateWindow()
+
+    def resizeEvent(self, e) -> None:  # noqa: N802
+        super().resizeEvent(e)
+        narrow = self.width() < px(520)
+        if self.quest is not None and narrow != getattr(self, "_was_narrow", narrow):
+            self.show_quest(self.quest)
+        self._was_narrow = narrow
 
     def _go(self, quest: Quest) -> None:
         if self.on_open:
@@ -331,7 +353,11 @@ __all__ = ["ImageLoader", "ImageViewer", "QuestCard", "quest_list_text", "QFrame
 DEPT_SHORT = [("combat", "Боевой"), ("medical", "Медицинский"), ("tactical", "Тактический"),
               ("logistics", "Снабжения"), ("research", "Исследований")]
 MAP_ORDER = ["零号大坝", "长弓溪谷", "航天基地", "巴克什", "潮汐监狱", "任意战区行动", "任意机密/绝密行动", "局外"]
-SEASON_STAGES = {1: "沉舟", 2: "星火", 3: "", 4: ""}
+SEASON_STAGES = {1: "沉舟", 2: "星火", 3: "面具", 4: "众生"}   # запасные названия, если нет season_meta.json
+
+# Ширина справочника, при которой меняется раскладка
+WIDE_MIN = 900      # рельс + список + карточка
+SPLIT_MIN = 640     # выпадающий список разделов + список + карточка; уже — список ИЛИ карточка
 
 
 def browser_qss() -> str:
@@ -340,7 +366,7 @@ def browser_qss() -> str:
     return f"""
 QFrame#rail {{ background: transparent; }}
 QLabel#railcap {{ color: {MUTED}; font-size: {px(11)}px; font-weight: 700; letter-spacing: 1px; padding: {px(6)}px {px(4)}px; }}
-QPushButton#railbtn {{ text-align: left; padding: {px(10)}px {px(12)}px; border-radius: {px(10)}px; background: {CARD};
+QPushButton#railbtn {{ text-align: left; padding: {px(9)}px {px(12)}px; border-radius: {px(10)}px; background: {CARD};
   border: 1px solid {LINE}; color: {TEXT}; }}
 QPushButton#railbtn:hover {{ border-color: #3a4656; }}
 QPushButton#railbtn:checked {{ background: {ACCENT_DIM}; border: 1px solid {ACCENT}; color: {ACCENT}; font-weight: 700; }}
@@ -350,15 +376,19 @@ QTreeWidget#qtree::item {{ padding: {px(7)}px {px(4)}px; border-radius: {px(6)}p
 QTreeWidget#qtree::item:hover {{ background: #1a212b; }}
 QTreeWidget#qtree::item:selected {{ background: {ACCENT_DIM}; color: {TEXT}; }}
 QTreeWidget#qtree::indicator {{ width: {px(16)}px; height: {px(16)}px; }}
+QLabel#unlock {{ color: #ebb43c; font-size: {px(12)}px; }}
 """
 
 
 class QuestBrowser(QWidget):
-    """Справочник как в игре: слева отделы и этапы сезона, в середине ветки и задания, справа карточка."""
+    """Справочник как в игре: слева отделы и этапы сезона, в середине ветки и задания, справа карточка.
+
+    Раскладка зависит от ширины: широкое окно — три колонки; среднее — разделы в выпадающем списке,
+    список и карточка рядом; узкое — список, а по клику карточка с кнопкой «←» назад."""
 
     def __init__(self, icon, loader: ImageLoader, reward_ru, progress):
         super().__init__()
-        from PySide6.QtWidgets import QButtonGroup, QLineEdit, QTreeWidget
+        from PySide6.QtWidgets import QButtonGroup, QComboBox, QLineEdit, QTreeWidget
 
         from .settings import Switch
 
@@ -366,18 +396,19 @@ class QuestBrowser(QWidget):
         self.progress = progress
         self.section = "combat"
         self._building = False
+        self._mode = ""
+        self._card_open = False   # узкий режим: показана карточка вместо списка
         self.setStyleSheet(browser_qss())
 
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(px(12))
 
-        # --- рельс: отделы и этапы сезона
+        # --- рельс: отделы и этапы сезона (прокручивается, если окно низкое)
         rail = QFrame()
         rail.setObjectName("rail")
-        rail.setFixedWidth(px(150))
         rl = QVBoxLayout(rail)
-        rl.setContentsMargins(0, 0, 0, 0)
+        rl.setContentsMargins(0, 0, px(4), 0)
         rl.setSpacing(px(6))
         self.rail_group = QButtonGroup(self)
         self.rail_btns: dict[str, QPushButton] = {}
@@ -386,16 +417,27 @@ class QuestBrowser(QWidget):
             self._rail_btn(rl, key, title)
         rl.addSpacing(px(8))
         rl.addWidget(label("СЕЗОН «СОЗВЕЗДИЕ»", "railcap"))
+        self.rail_season_lay = rl
         for stage in SEASON_STAGES:
             self._rail_btn(rl, f"season:{stage}", f"{stage:02d}")
         rl.addStretch(1)
-        root.addWidget(rail)
+        self.rail_scroll = QScrollArea()
+        self.rail_scroll.setWidgetResizable(True)
+        self.rail_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.rail_scroll.setWidget(rail)
+        self.rail_scroll.setFixedWidth(px(196))
+        root.addWidget(self.rail_scroll)
 
         # --- список
         mid = QVBoxLayout()
+        mid.setContentsMargins(0, 0, 0, 0)
         mid.setSpacing(px(8))
+        self.combo = QComboBox()
+        self.combo.setToolTip("Раздел: отдел или этап сезона")
+        self.combo.activated.connect(lambda i: self.set_section(self.combo.itemData(i)))
+        mid.addWidget(self.combo)
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Поиск: название, предмет, место или «1-3», «2-1-4»")
+        self.search.setPlaceholderText("Поиск: название, предмет, место, «1-3», «2-1-4»")
         self.search.setClearButtonEnabled(True)
         self.search.textChanged.connect(lambda _t: self.rebuild())
         mid.addWidget(self.search)
@@ -406,26 +448,76 @@ class QuestBrowser(QWidget):
         self.hide_done.toggled.connect(lambda _v: self.rebuild())
         hide_row.addWidget(self.hide_done)
         mid.addLayout(hide_row)
+        self.unlock = label("", "unlock", wrap=True)
+        self.unlock.setVisible(False)
+        mid.addWidget(self.unlock)
         self.tree = QTreeWidget()
         self.tree.setObjectName("qtree")
         self.tree.setHeaderHidden(True)
         self.tree.setIndentation(px(14))
-        self.tree.setMinimumWidth(px(300))
+        self.tree.setMinimumWidth(px(220))
+        self.tree.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.tree.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.tree.itemChanged.connect(self._on_item_changed)
         self.tree.currentItemChanged.connect(self._on_current)
+        self.tree.itemClicked.connect(self._on_clicked)
         mid.addWidget(self.tree, 1)
         self.stats = label("", "muted")
         mid.addWidget(self.stats)
-        midw = QWidget()
-        midw.setLayout(mid)
-        midw.setFixedWidth(px(340))
-        root.addWidget(midw)
+        self.midw = QWidget()
+        self.midw.setLayout(mid)
+        root.addWidget(self.midw)
 
         # --- карточка
         self.card = QuestCard(icon, loader, reward_ru, self._get, self._children,
                               embedded=True, progress=progress, on_open=lambda q: self.select(q.id))
+        self.card.on_back = self._back_to_list
+        self.card.setMinimumWidth(px(260))
         root.addWidget(self.card, 1)
         progress.listeners.append(self._on_progress_changed)
+        self._apply_mode()
+
+    # ------------------------------------------------------------ раскладка
+    def resizeEvent(self, e) -> None:  # noqa: N802
+        super().resizeEvent(e)
+        self._apply_mode()
+
+    def _apply_mode(self) -> None:
+        w = self.width()
+        mode = "wide" if w >= px(WIDE_MIN) else "split" if w >= px(SPLIT_MIN) else "narrow"
+        changed = mode != self._mode
+        self._mode = mode
+        self.rail_scroll.setVisible(mode == "wide")
+        self.unlock.setVisible(bool(self.unlock.text()) and self.height() >= px(480))
+        self.combo.setVisible(mode != "wide")
+        if mode == "narrow":
+            self.midw.setMinimumWidth(0)
+            self.midw.setMaximumWidth(16777215)
+            self.midw.setVisible(not self._card_open)
+            self.card.setVisible(self._card_open)
+            self.card.setMinimumWidth(0)
+        else:
+            free = w - (px(208) if mode == "wide" else 0)
+            list_w = max(px(250), min(px(330), int(free * 0.42)))
+            self.midw.setFixedWidth(list_w)
+            self.midw.setVisible(True)
+            self.card.setVisible(True)
+            self.card.setMinimumWidth(px(260))
+        want_back = mode == "narrow"
+        if changed or self.card.show_back != want_back:
+            self.card.show_back = want_back
+            if self.card.quest is not None:
+                self.card.show_quest(self.card.quest)
+
+    def _open_card(self) -> None:
+        if self._mode == "narrow" and not self._card_open:
+            self._card_open = True
+            self._apply_mode()
+
+    def _back_to_list(self) -> None:
+        self._card_open = False
+        self._apply_mode()
+        self.tree.setFocus()
 
     # ---------------------------------------------------------------- data
     def _rail_btn(self, lay, key: str, title: str) -> None:
@@ -457,23 +549,50 @@ class QuestBrowser(QWidget):
             return [q for q in self.db.quests if q.dept == "season" and q.stage == stage]
         return [q for q in self.db.quests if q.dept == section]
 
+    def _stage_name(self, stage: int) -> str:
+        zh = ""
+        if self.db is not None and hasattr(self.db, "stage_name"):
+            zh = self.db.stage_name(stage)
+            zh = zh.split("：")[-1] if zh else ""
+        return self._line_ru(zh or SEASON_STAGES.get(stage, ""))
+
+    def _section_title(self, key: str) -> tuple[str, int, int, bool]:
+        """Название раздела, сколько выполнено, всего, доступен ли."""
+        qs = self._section_quests(key)
+        done = sum(self.progress.is_done(q.id) for q in qs)
+        if key.startswith("season:"):
+            stage = int(key.split(":")[1])
+            return f"{stage:02d} · {self._stage_name(stage)}", done, len(qs), bool(qs)
+        return dict(DEPT_SHORT)[key], done, len(qs), True
+
     def _update_rail(self) -> None:
+        if self.db is None:
+            return
+        self.combo.blockSignals(True)
+        self.combo.clear()
         for key, title in DEPT_SHORT:
-            qs = self._section_quests(key)
-            done = sum(self.progress.is_done(q.id) for q in qs)
-            self.rail_btns[key].setText(f"{title}\n{done}/{len(qs)}")
-        for stage, fallback in SEASON_STAGES.items():
+            name, done, total, _ok = self._section_title(key)
+            self.rail_btns[key].setText(f"{name}\n{done}/{total}")
+            self.combo.addItem(f"{name} — {done}/{total}", key)
+        for stage in SEASON_STAGES:
             key = f"season:{stage}"
-            qs = self._section_quests(key)
+            name, done, total, ok = self._section_title(key)
             b = self.rail_btns[key]
-            if qs:
-                done = sum(self.progress.is_done(q.id) for q in qs)
-                main_line = next((q.line_name for q in qs if q.line == "main"), fallback)
-                b.setText(f"{stage:02d} · {self._line_ru(main_line)}\n{done}/{len(qs)}")
+            fm = b.fontMetrics()
+            short = fm.elidedText(name, Qt.TextElideMode.ElideRight, px(196) - px(34))
+            b.setToolTip(name + ("\n" + self.db.stage_unlock(stage) if hasattr(self.db, "stage_unlock")
+                                 and self.db.stage_unlock(stage) else ""))
+            if ok:
+                b.setText(f"{short}\n{done}/{total}")
                 b.setEnabled(True)
+                self.combo.addItem(f"Сезон {name} — {done}/{total}", key)
             else:
                 b.setText(f"{stage:02d}  🔒\nпоявится позже")
                 b.setEnabled(False)
+        i = self.combo.findData(self.section)
+        if i >= 0:
+            self.combo.setCurrentIndex(i)
+        self.combo.blockSignals(False)
 
     def _line_ru(self, zh: str) -> str:
         return (self._lookup_name(zh) or zh) if zh else ""
@@ -483,10 +602,14 @@ class QuestBrowser(QWidget):
         return (fn(zh) if fn else "") or ""
 
     def set_section(self, section: str) -> None:
+        if not section:
+            return
         self.section = section
         if section in self.rail_btns:
             self.rail_btns[section].setChecked(True)
+        self._card_open = False
         self.rebuild()
+        self._apply_mode()
 
     # --------------------------------------------------------------- tree
     def _groups(self) -> list[tuple[str, list[Quest]]]:
@@ -507,7 +630,11 @@ class QuestBrowser(QWidget):
             for g, items in ordered:
                 line = g.split("|")[1]
                 name = self._line_ru(items[0].line_name)
-                title = f"Основная линия · «{name}»" if line == "main" else f"{line} · «{name}»"
+                if line == "main":
+                    title = f"Основная линия · «{name}»"
+                else:
+                    reserve = any(q.qtype == "赛季备用支线" for q in items)
+                    title = f"{line} · «{name}»" + (" · резерв" if reserve else "")
                 out.append((title, items))
             return out
         order = {m: i for i, m in enumerate(MAP_ORDER)}
@@ -528,6 +655,12 @@ class QuestBrowser(QWidget):
         grey = QBrush(QColor("#5c6572"))
         total = done_total = 0
         searching = bool(self.search.text().strip())
+        unlock = ""
+        if self.section.startswith("season:") and not searching and hasattr(self.db, "stage_unlock"):
+            unlock = self.db.stage_unlock(int(self.section.split(":")[1]))
+        self.unlock.setText("🔓 " + unlock if unlock else "")
+        self.unlock.setVisible(bool(unlock) and self.height() >= px(480))
+        self.combo.setToolTip(unlock or "Раздел: отдел или этап сезона")
         for title, items in self._groups():
             done_ids = [q.id for q in items if self.progress.is_done(q.id)]
             closed = bool(items) and len(done_ids) == len(items)
@@ -536,7 +669,12 @@ class QuestBrowser(QWidget):
             f.setBold(True)
             g.setFont(0, f)
             g.setFlags(g.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsAutoTristate)
-            g.setToolTip(0, "Галочка на ветке — закрыть / открыть все её задания")
+            tip = "Галочка на ветке — закрыть / открыть все её задания"
+            if items and items[0].dept == "season" and not searching and hasattr(self.db, "line_info"):
+                info = self.db.line_info(items[0].stage, items[0].line)
+                if info.get("goal"):
+                    tip = f"{info['goal']}\n{tip}"
+            g.setToolTip(0, f"{title}\n{tip}")
             if closed:
                 g.setForeground(0, grey)
             self.tree.addTopLevelItem(g)
@@ -554,11 +692,13 @@ class QuestBrowser(QWidget):
                     sub += " · нет данных"
                 elif q.images:
                     sub += f" · 📷 {len(q.images)}"
+                if q.forced:
+                    sub += " · ⚠"
                 it = QTreeWidgetItem([f"{q.name_ru or q.name}\n{sub}"])
                 it.setData(0, Qt.ItemDataRole.UserRole, q.id)
                 it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
                 it.setCheckState(0, Qt.CheckState.Checked if done else Qt.CheckState.Unchecked)
-                it.setToolTip(0, "Галочка — задание выполнено")
+                it.setToolTip(0, f"{q.name_ru or q.name}\n{q.name}\nГалочка — задание выполнено")
                 if done:
                     it.setForeground(0, grey)
                 g.addChild(it)
@@ -600,6 +740,7 @@ class QuestBrowser(QWidget):
                 self.rail_btns[section].setChecked(True)
         self.rebuild(keep=quest_id)
         self.card.show_quest(q)
+        self._open_card()
 
     def _on_current(self, it, _prev=None) -> None:
         if it is None or self._building:
@@ -609,6 +750,11 @@ class QuestBrowser(QWidget):
             q = self._get(qid)
             if q:
                 self.card.show_quest(q)
+
+    def _on_clicked(self, it, _col=0) -> None:
+        if it is not None and it.data(0, Qt.ItemDataRole.UserRole) and not self._building:
+            self._on_current(it)
+            self._open_card()
 
     def _on_item_changed(self, _it, _col) -> None:
         if self._building:

@@ -6,8 +6,8 @@ import copy
 from PySide6.QtCore import QPoint, QRect, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter
 from PySide6.QtWidgets import (
-    QAbstractButton, QApplication, QButtonGroup, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel,
-    QLineEdit, QListWidget, QListWidgetItem, QPushButton, QScrollArea, QSizePolicy, QSlider,
+    QAbstractButton, QApplication, QBoxLayout, QButtonGroup, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel,
+    QLayout, QLineEdit, QListWidget, QListWidgetItem, QPushButton, QScrollArea, QSizePolicy, QSlider,
     QStackedWidget, QVBoxLayout, QWidget,
 )
 
@@ -78,7 +78,7 @@ QPushButton#action:hover {{ border-color: {ACCENT}; background: #19212b; }}
 QPushButton#engine {{ text-align: left; padding: {px(14)}px {px(16)}px; border-radius: {px(12)}px; background: {CARD}; }}
 QPushButton#engine:hover {{ border-color: #3a4656; }}
 QPushButton#engine:checked {{ border: 1px solid {ACCENT}; background: {ACCENT_DIM}; }}
-QPushButton#seg {{ border-radius: 0; padding: {px(9)}px {px(16)}px; min-width: {px(104)}px; background: {CARD}; }}
+QPushButton#seg {{ border-radius: 0; padding: {px(9)}px {px(12)}px; min-width: {px(78)}px; background: {CARD}; }}
 QPushButton#seg:checked {{ background: {ACCENT}; color: #06231a; font-weight: 700; border-color: {ACCENT}; }}
 QPushButton#hotkey {{ font-family: Consolas, "Cascadia Mono", monospace; font-weight: 600; min-width: {px(170)}px; padding: {px(8)}px {px(14)}px; background: #0f141b; }}
 QPushButton#hotkey:hover {{ border-color: #3a4656; }}
@@ -112,6 +112,142 @@ QSlider::handle:horizontal {{ background: #fff; width: {px(16)}px; height: {px(1
 
 
 # ------------------------------------------------------------------ widgets
+class FlowLayout(QLayout):
+    """Раскладка «как текст»: элементы идут в строку и переносятся, когда не помещаются.
+    Нужна, чтобы чипы, кнопки и миниатюры не распирали узкое окно."""
+
+    def __init__(self, parent=None, spacing: int | None = None):
+        super().__init__(parent)
+        self._items: list = []
+        self._sp = px(8) if spacing is None else spacing
+        self.setContentsMargins(0, 0, 0, 0)
+
+    def addItem(self, item) -> None:  # noqa: N802
+        self._items.append(item)
+
+    def count(self) -> int:
+        return len(self._items)
+
+    def itemAt(self, i: int):  # noqa: N802
+        return self._items[i] if 0 <= i < len(self._items) else None
+
+    def takeAt(self, i: int):  # noqa: N802
+        return self._items.pop(i) if 0 <= i < len(self._items) else None
+
+    def expandingDirections(self):  # noqa: N802
+        return Qt.Orientation(0)
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802
+        return True
+
+    def heightForWidth(self, w: int) -> int:  # noqa: N802
+        return self._do(QRect(0, 0, w, 0), True)
+
+    def setGeometry(self, r: QRect) -> None:  # noqa: N802
+        super().setGeometry(r)
+        self._do(r, False)
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return self.minimumSize()
+
+    def minimumSize(self) -> QSize:  # noqa: N802
+        s = QSize()
+        for it in self._items:
+            m = it.minimumSize()
+            if it.hasHeightForWidth():      # переносимый текст сжимается до разумной ширины
+                m.setWidth(min(m.width(), px(140)))
+            s = s.expandedTo(m)
+        m = self.contentsMargins()
+        return s + QSize(m.left() + m.right(), m.top() + m.bottom())
+
+    def _do(self, r: QRect, test: bool) -> int:
+        m = self.contentsMargins()
+        x0, y = r.x() + m.left(), r.y() + m.top()
+        right = r.right() - m.right()
+        x, line_h = x0, 0
+        for it in self._items:
+            if it.widget() is not None and not it.widget().isVisibleTo(it.widget().parentWidget()):
+                continue
+            hint = it.sizeHint()
+            avail = max(1, right - x0 + 1)
+            w = min(hint.width(), avail)
+            if x > x0 and x + w - 1 > right:
+                x, y, line_h = x0, y + line_h + self._sp, 0
+            h = hint.height()
+            if w < hint.width() and it.hasHeightForWidth():   # длинный чип переносится по словам
+                h = max(h, it.heightForWidth(w))
+            if not test:
+                it.setGeometry(QRect(x, y, w, h))
+            x += w + self._sp
+            line_h = max(line_h, h)
+        return y + line_h - r.y() + m.bottom()
+
+
+class ChipLabel(QLabel):
+    """Чип: в одну строку, а если не помещается — переносится по словам."""
+
+    def __init__(self, text: str, name: str = "chip"):
+        super().__init__(text)
+        self.setObjectName(name)
+        self.setWordWrap(True)
+        # невидимый двойник без переноса — даёт естественную ширину в одну строку (с учётом QSS)
+        self._probe = QLabel(text, self)
+        self._probe.setObjectName(name)
+        self._probe.hide()
+
+    def setText(self, text: str) -> None:  # noqa: N802
+        super().setText(text)
+        self._probe.setText(text)
+        self.updateGeometry()
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return self._probe.sizeHint()
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        s = self._probe.sizeHint()
+        return QSize(min(s.width(), px(140)), s.height())
+
+
+def flow_widget(widgets: list, spacing: int | None = None) -> QWidget:
+    w = QWidget()
+    w.setStyleSheet("background: transparent;")
+    fl = FlowLayout(w, spacing)
+    for x in widgets:
+        fl.addWidget(x)
+    w.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+    return w
+
+
+class WrapButton(QPushButton):
+    """Кнопка с заголовком и переносимым описанием: не распирает окно длинным текстом."""
+
+    def __init__(self, title: str, desc: str):
+        super().__init__()
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(px(16), px(12), px(16), px(12))
+        lay.setSpacing(px(2))
+        for text, name in ((title, "h2"), (desc, "muted")):
+            lb = label(text, name, wrap=True)
+            lb.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            lb.setStyleSheet("background: transparent;")
+            lay.addWidget(lb)
+        sp = self.sizePolicy()
+        sp.setHeightForWidth(True)
+        self.setSizePolicy(sp)
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return self.layout().sizeHint()
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return self.layout().minimumSize()
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802
+        return True
+
+    def heightForWidth(self, w: int) -> int:  # noqa: N802
+        return self.layout().totalHeightForWidth(w)
+
+
 class Switch(QAbstractButton):
     def __init__(self, checked: bool = False):
         super().__init__()
@@ -281,12 +417,15 @@ def sep() -> QFrame:
 
 def row(title: str, hint: str, control: QWidget) -> QWidget:
     w = QWidget()
+    w.setObjectName("row")
     h = QHBoxLayout(w)
+    w.row_lay = h
+    w.row_control = control
     h.setContentsMargins(0, 0, 0, 0)
     h.setSpacing(px(16))
     col = QVBoxLayout()
     col.setSpacing(px(2))
-    col.addWidget(label(title, "h2"))
+    col.addWidget(label(title, "h2", wrap=True))
     if hint:
         col.addWidget(label(hint, "muted", wrap=True))
     h.addLayout(col, 1)
@@ -347,7 +486,9 @@ class SettingsWindow(QWidget):
         self.setWindowTitle("DF Translator")
         self.setWindowIcon(icon)
         self.resize(px(1240), px(780))
-        self.setMinimumSize(px(980), px(600))
+        # Окно можно сделать маленьким: боковое меню сворачивается в значки, разделы перестраиваются.
+        self.setMinimumSize(px(520), px(420))
+        self._compact = None
         self.setStyleSheet(build_qss())
         self.cfg = cfg
         self.draft = copy.deepcopy(cfg)
@@ -360,16 +501,20 @@ class SettingsWindow(QWidget):
         side = QFrame()
         side.setObjectName("side")
         side.setFixedWidth(px(220))
+        self.side = side
         sl = QVBoxLayout(side)
         sl.setContentsMargins(0, px(22), 0, px(16))
         sl.setSpacing(0)
         brand = QHBoxLayout()
         brand.setContentsMargins(px(22), 0, px(16), px(18))
-        brand.addWidget(label("译  DF Translator", "brand"))
+        self.brand_label = label("译  DF Translator", "brand")
+        brand.addWidget(self.brand_label)
+        self.brand_box = brand
         sl.addLayout(brand)
         self.nav = QListWidget()
         self.nav.setObjectName("nav")
         self.nav.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.nav.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.quest_db = None
         self.history = None
         pages = [
@@ -384,6 +529,7 @@ class SettingsWindow(QWidget):
             ("about", "ⓘ   О программе", "Автозапуск, глоссарий, античит", self._page_about),
         ]
         self.page_index = {key: i for i, (key, *_rest) in enumerate(pages)}
+        self.nav_texts = [t for _key, t, _tip, _b in pages]
         for _key, t, tip, _builder in pages:
             it = QListWidgetItem(t)
             it.setToolTip(tip)
@@ -391,11 +537,14 @@ class SettingsWindow(QWidget):
         sl.addWidget(self.nav, 1)
         ver = label(f"v{__version__} · by LastNova", "version")
         ver.setToolTip(f"{CREDIT}\nВопросы: Discord-чат или Telegram @{TELEGRAM}")
+        self.ver_label = ver
         sl.addWidget(ver, 0, Qt.AlignmentFlag.AlignHCenter)
 
         self.stack = QStackedWidget()
         for _key, _t, _tip, builder in pages:
             self.stack.addWidget(builder())
+        self.page_lays = [self.stack.widget(i).widget().layout() for i in range(self.stack.count())
+                          if isinstance(self.stack.widget(i), QScrollArea)]
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.nav.setCurrentRow(0)
 
@@ -410,8 +559,60 @@ class SettingsWindow(QWidget):
         root.addWidget(right_w, 1)
 
         self._building = False
-        self.refresh_home()
-        self._refresh_dirty()
+        self.load_from_draft()
+        self._apply_layout()
+
+    # ------------------------------------------------------------ адаптивность
+    def resizeEvent(self, e) -> None:  # noqa: N802
+        super().resizeEvent(e)
+        if hasattr(self, "btn_reset"):
+            self._apply_layout()
+
+    def _apply_layout(self) -> None:
+        """Перестраивает окно под его ширину: узкое окно — меню значками, карточки столбиком."""
+        w = self.width()
+        compact = w < px(980)
+        if compact != self._compact:
+            self._compact = compact
+            self.side.setFixedWidth(px(64) if compact else px(220))
+            self.brand_label.setText("译" if compact else "译  DF Translator")
+            self.brand_box.setContentsMargins(px(22) if not compact else px(20), 0, px(16) if not compact else 0, px(18))
+            self.ver_label.setText(__version__ if compact else f"v{__version__} · by LastNova")
+            self.nav.setStyleSheet(
+                f"QListWidget#nav::item {{ padding: {px(9)}px 0; margin: {px(2)}px {px(8)}px; }}" if compact else "")
+            for i, t in enumerate(self.nav_texts):
+                it = self.nav.item(i)
+                it.setText(t.split()[0] if compact else t)
+                it.setTextAlignment(Qt.AlignmentFlag.AlignCenter if compact else
+                                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        content = w - self.side.width()
+        narrow = content < px(720)
+        if hasattr(self, "cards_lay"):
+            self.cards_lay.setDirection(QBoxLayout.Direction.TopToBottom if narrow else QBoxLayout.Direction.LeftToRight)
+        if hasattr(self, "q_hint"):
+            self.q_hint.setVisible(content >= px(860))
+            # низкое окно: заголовок «Квесты» прячем — место нужнее списку
+            low = self.height() < px(640)
+            self.q_title.setVisible(not low)
+            self.q_hint.setVisible(content >= px(860) and not low)
+            self.q_page_lay.setContentsMargins(px(14) if narrow else px(24), px(10) if low else px(22),
+                                               px(14) if narrow else px(24), px(10) if low else px(16))
+        m = px(16) if narrow else px(32)
+        self.save_bar_lay.setContentsMargins(m, px(10), m, px(10))
+        self.btn_reset.setText("Отменить" if narrow else "Отменить изменения")
+        for lay in getattr(self, "page_lays", []):
+            lay.setContentsMargins(m, px(20) if narrow else px(28), m, px(20) if narrow else px(28))
+        stacked = content < px(640)
+        if stacked != getattr(self, "_rows_stacked", None):
+            self._rows_stacked = stacked
+            for r in self.findChildren(QWidget, "row"):
+                lay = getattr(r, "row_lay", None)
+                if lay is None:
+                    continue
+                lay.setDirection(QBoxLayout.Direction.TopToBottom if stacked else QBoxLayout.Direction.LeftToRight)
+                lay.setSpacing(px(8) if stacked else px(16))
+                lay.setAlignment(r.row_control, (Qt.AlignmentFlag.AlignLeft if stacked else Qt.AlignmentFlag.AlignRight)
+                                 | Qt.AlignmentFlag.AlignVCenter)
 
     # --------------------------------------------------------------- save bar
     def _save_bar(self) -> QWidget:
@@ -420,7 +621,8 @@ class SettingsWindow(QWidget):
         bar.setStyleSheet(f"QFrame#side {{ border-right: 0; border-top: 1px solid {LINE}; }}")
         h = QHBoxLayout(bar)
         h.setContentsMargins(px(32), px(12), px(32), px(12))
-        self.dirty_label = label("", "muted")
+        self.save_bar_lay = h
+        self.dirty_label = label("", "muted", wrap=True)
         h.addWidget(self.dirty_label, 1)
         self.btn_reset = QPushButton("Отменить изменения")
         self.btn_reset.clicked.connect(self.discard)
@@ -483,16 +685,11 @@ class SettingsWindow(QWidget):
         sc, lay = page("Главная", "")
         # --- статус
         sc_card, sl = card()
-        top = QHBoxLayout()
-        top.setSpacing(px(12))
-        self.status_label = label("● Готово к работе", "statusOk")
-        top.addWidget(self.status_label)
-        top.addStretch(1)
-        self.chip_mode = label("", "chip")
-        self.chip_engine = label("", "chip")
-        top.addWidget(self.chip_mode)
-        top.addWidget(self.chip_engine)
-        sl.addLayout(top)
+        self.status_label = label("● Готово к работе", "statusOk", wrap=True)
+        sl.addWidget(self.status_label)
+        self.chip_mode = ChipLabel("")
+        self.chip_engine = ChipLabel("")
+        sl.addWidget(flow_widget([self.chip_mode, self.chip_engine], px(6)))
         self.status_sub = label("Нажмите горячую клавишу в игре или карточку ниже — окно скроется на время снимка.", "muted", wrap=True)
         sl.addWidget(self.status_sub)
         lay.addWidget(sc_card)
@@ -500,6 +697,7 @@ class SettingsWindow(QWidget):
         # --- действия
         cards = QHBoxLayout()
         cards.setSpacing(px(14))
+        self.cards_lay = cards
         self.action_cards: dict[str, ActionCard] = {}
         for key, glyph, title, desc, hk, danger, tip in (
             ("full", "⛶", "Весь экран", "Перевести монитор, где курсор", "full_screen", False,
@@ -531,7 +729,7 @@ class SettingsWindow(QWidget):
         grid.setVerticalSpacing(px(10))
         self.home_keys: dict[str, KeyCaps] = {}
         for i, (name, title, hint) in enumerate(HOTKEY_INFO):
-            lb = label(title, "")
+            lb = label(title, "", wrap=True)
             lb.setToolTip(hint)
             kcp = KeyCaps()
             kcp.setToolTip(hint)
@@ -629,10 +827,13 @@ class SettingsWindow(QWidget):
         lay = QVBoxLayout(w)
         lay.setContentsMargins(px(24), px(22), px(24), px(16))
         lay.setSpacing(px(12))
+        self.q_page_lay = lay
         head = QHBoxLayout()
-        head.addWidget(label("Квесты", "h1"))
+        self.q_title = label("Квесты", "h1")
+        head.addWidget(self.q_title)
         head.addStretch(1)
-        head.addWidget(label("В игре: откройте задание и нажмите «Гид по квесту» — оно откроется здесь", "muted"))
+        self.q_hint = label("В игре: откройте задание и нажмите «Гид по квесту» — оно откроется здесь", "muted")
+        head.addWidget(self.q_hint)
         lay.addLayout(head)
         self.q_host = QVBoxLayout()
         lay.addLayout(self.q_host, 1)
@@ -653,7 +854,7 @@ class SettingsWindow(QWidget):
             f"QListWidget#hlist {{ background: {CARD}; border: 1px solid {LINE}; border-radius: {px(12)}px; padding: {px(6)}px; }}"
             f"QListWidget#hlist::item {{ padding: {px(8)}px {px(12)}px; border-radius: {px(8)}px; }}"
             f"QListWidget#hlist::item:selected {{ background: {ACCENT_DIM}; color: {TEXT}; }}")
-        self.h_list.setMinimumHeight(px(330))
+        self.h_list.setMinimumHeight(px(200))
         lay.addWidget(self.h_list, 1)
         edit_box = QHBoxLayout()
         self.h_edit = QLineEdit()
@@ -661,7 +862,6 @@ class SettingsWindow(QWidget):
         self.h_list.currentItemChanged.connect(self._on_history_pick)
         edit_box.addWidget(self.h_edit, 1)
         lay.addLayout(edit_box)
-        btns = QHBoxLayout()
         copy_btn = QPushButton("Копировать")
         copy_btn.setToolTip("Скопировать перевод выбранной строки")
         copy_btn.clicked.connect(self._history_copy)
@@ -674,12 +874,7 @@ class SettingsWindow(QWidget):
         fix_all.clicked.connect(lambda: self._history_fix(True))
         clear = QPushButton("Очистить")
         clear.clicked.connect(self.history_clear.emit)
-        btns.addWidget(copy_btn)
-        btns.addWidget(fix_me)
-        btns.addWidget(fix_all)
-        btns.addStretch(1)
-        btns.addWidget(clear)
-        lay.addLayout(btns)
+        lay.addWidget(flow_widget([copy_btn, fix_me, fix_all, clear]))
         self.h_note = label("", "muted", wrap=True)
         lay.addWidget(self.h_note)
         return sc
@@ -755,7 +950,7 @@ class SettingsWindow(QWidget):
         self.engine_btns: dict[str, QPushButton] = {}
         grp = QButtonGroup(self)
         for key, title, desc in ENGINE_INFO:
-            b = QPushButton(f"{title}\n{desc}")
+            b = WrapButton(title, desc)
             b.setObjectName("engine")
             b.setCheckable(True)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -777,20 +972,18 @@ class SettingsWindow(QWidget):
         self.claude_model.currentTextChanged.connect(lambda v: self._set("engines.claude.model", v.strip()))
         cl.addWidget(row("Модель Claude", "Haiku — дёшево и быстро; Sonnet — точнее.", self.claude_model))
         lay.addWidget(c)
-        t = QHBoxLayout()
         self.test_btn = QPushButton("Проверить выбранный движок")
         self.test_btn.clicked.connect(self._run_test)
         self.test_result = label("", "muted", wrap=True)
-        t.addWidget(self.test_btn)
-        t.addWidget(self.test_result, 1)
-        lay.addLayout(t)
+        lay.addWidget(self.test_btn, 0, Qt.AlignmentFlag.AlignLeft)
+        lay.addWidget(self.test_result)
         lay.addStretch(1)
         return sc
 
     def _key_edit(self, path: str, value: str) -> QLineEdit:
         e = QLineEdit(value)
         e.setEchoMode(QLineEdit.EchoMode.Password)
-        e.setMinimumWidth(px(200))
+        e.setMinimumWidth(px(150))
         e.setMaximumWidth(px(320))
         e.setPlaceholderText("не задан")
         e.textChanged.connect(lambda v: self._set(path, v.strip()))
@@ -813,7 +1006,7 @@ class SettingsWindow(QWidget):
     def _slider_row(self, key: str, path: str, title: str, hint: str, lo: int, hi: int, fmt) -> QWidget:
         sl = QSlider(Qt.Orientation.Horizontal)
         sl.setRange(lo, hi)
-        sl.setMinimumWidth(px(160))
+        sl.setMinimumWidth(px(110))
         val = label("", "value")
         val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.sliders[key] = (sl, val)
@@ -923,17 +1116,13 @@ class SettingsWindow(QWidget):
         c2, c2l = card()
         self.update_status = label("Ещё не проверялось", "muted", wrap=True)
         c2l.addWidget(self.update_status)
-        btns = QHBoxLayout()
         self.btn_check = QPushButton("Проверить сейчас")
         self.btn_check.clicked.connect(self.check_updates.emit)
         self.btn_install = QPushButton("Установить и перезапустить")
         self.btn_install.setObjectName("primary")
         self.btn_install.setVisible(False)
         self.btn_install.clicked.connect(self.install_update.emit)
-        btns.addWidget(self.btn_check)
-        btns.addWidget(self.btn_install)
-        btns.addStretch(1)
-        c2l.addLayout(btns)
+        c2l.addWidget(flow_widget([self.btn_check, self.btn_install]))
         lay.addWidget(c2)
         self.notes_card, nl = card()
         nl.addWidget(label("Что нового", "h2"))

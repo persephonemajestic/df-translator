@@ -115,9 +115,10 @@ class QuestBook:
         gm = _GRADE_RE.match(name)
         if gm:
             grade = self.g.lookup(gm.group("grade"))
-            base = self.g.lookup(gm.group("name"))
-            base_ru = base.ru if base else gm.group("name")
+            base_ru = self._reward_name(gm.group("name")) or gm.group("name")
             if grade:
+                if base_ru.endswith(")"):   # «QJB201 (ручной пулемёт)» -> «QJB201 (ручной пулемёт, лёгкий тюнинг)»
+                    return f"{base_ru[:-1]}, {grade.ru})"
                 return f"{base_ru} ({grade.ru})"
         pm = re.match(r"^(小改|半改|满改|裸枪)(.+)$", name)  # «半改M14»
         if pm:

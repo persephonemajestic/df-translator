@@ -387,7 +387,7 @@ def test_questdb_loads_and_matches():
     assert "Нулевая плотина (Обычный, Секретно)" == translate_map("零号大坝（常规），零号大坝（机密）")
     items = db.get("combat-41").items()
     assert "Прецизионная карта памяти" in items
-    assert [q.id for q in db.search("арбалет")] == ["season-1"] and db.search("Прецизионная")
+    assert [q.id for q in db.search("арбалет")] == ["season-207", "season-208"] and db.search("Прецизионная")
     # все названия квестов переведены
     assert all(x.name_ru != x.name for x in db.quests), [x.name for x in db.quests if x.name_ru == x.name][:5]
 
@@ -486,5 +486,26 @@ def test_season_lines_and_search():
     db = QuestDB(DATA)
     assert len(db.season_line("1-3")) == 5
     assert [q.name for q in db.search("2-1-4")] == ["爱的咏叹调-4"]
-    assert db.season_line("02")[0].name == "临时演员"
-    assert db.get("combat-3").group() == "长弓溪谷" and db.get("season-1").group() == "02|main"
+    assert db.season_line("02")[0].name == "消逝的家园"
+    assert db.get("combat-3").group() == "长弓溪谷" and db.get("season-207").group() == "02|main"
+    # все четыре этапа сезона с kkrb, ветки до 3-8, у всех заданий есть цели
+    assert db.season_stages() == [1, 2, 3, 4]
+    assert len(db.season_line("3-8")) == 5 and db.search("3-8-2")[0].name == "拾荒者-2"
+    season = [q for q in db.quests if q.dept == "season"]
+    assert len(season) == 116 and all(q.objectives for q in season)
+    assert all(ru and not any("\u4e00" <= c <= "\u9fff" for c in ru) for q in season for _z, ru in q.objectives)
+    assert db.stage_unlock(3).startswith("Открывается:")
+    assert db.get("season-315").forced_text().startswith("При входе в рейд снаряжение")
+
+
+def test_season_forced_conditions_translate_locally():
+    from dftranslator.questdb import QuestDB
+
+    g = Glossary(DATA, None)
+    book = QuestBook(g, None)
+    book.add_objectives(QuestDB(DATA).objectives)
+    t = Translator(g, book, {"engine": "google", "engines": {}}, None)
+    r = t.local("单局任务目标全部完成否则重置整个任务进度")
+    assert r and "за один рейд" in r.ru
+    r2 = t.local("在巴克什机密/绝密行动中，前往蓝汀旅店一楼大厅，获取任务物品【雷斯的特别菜单】")
+    assert r2 and "«Особое меню Рейса»" in r2.ru
