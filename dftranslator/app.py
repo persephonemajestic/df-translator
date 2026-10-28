@@ -117,6 +117,7 @@ class TranslatorApp:
         self._build_tray()
         self.hotkeys = self._new_listener()
         self.hotkeys.start()
+        self.settings.set_hotkey_status(self.hotkeys.errors)
 
         self.qt.aboutToQuit.connect(self._shutdown)
         QTimer.singleShot(400, self._startup_notice)
@@ -292,6 +293,8 @@ class TranslatorApp:
         self._restart_hotkeys()
         self.settings.cfg = self.cfg
         self.settings.draft = copy.deepcopy(self.cfg)
+        self.settings.refresh_home()
+        self.settings.set_hotkey_status(self.hotkeys.errors)
         self.settings._refresh_dirty()
         if self.hotkeys.errors:
             self.say("⚠ " + "; ".join(self.hotkeys.errors), True)
@@ -450,10 +453,11 @@ class TranslatorApp:
             self.busy = False
 
     def on_results(self, monitor: QRect, items: list[Item]) -> None:
+        hint = f"{self.cfg['hotkeys']['clear']} — убрать перевод"
         if self.cfg["display"]["mode"] == "panel":
-            self.panel.show_items(items)
+            self.panel.show_items(items, hint)
         else:
-            self.overlay.show_items(monitor, items)
+            self.overlay.show_items(monitor, items, hint)
 
     # ------------------------------------------------------------- lifecycle
     def _shutdown(self) -> None:

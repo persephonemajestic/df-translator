@@ -92,6 +92,19 @@ QComboBox:hover {{ border-color: #3a4656; }}
 QComboBox::drop-down {{ border: 0; width: {px(26)}px; }}
 QComboBox QAbstractItemView {{ background: {CARD}; border: 1px solid {LINE}; selection-background-color: {ACCENT_DIM}; selection-color: {ACCENT}; outline: 0; }}
 
+QToolTip {{ background: #1c2330; color: {TEXT}; border: 1px solid #3a4656; padding: {px(6)}px {px(8)}px; border-radius: {px(6)}px; }}
+QLabel#key {{ font-family: Consolas, "Cascadia Mono", monospace; font-size: {px(12)}px; font-weight: 700; color: {TEXT};
+  background: #0f141b; border: 1px solid #2b3442; border-bottom: {px(2)}px solid #2b3442; border-radius: {px(6)}px; padding: {px(2)}px {px(8)}px; }}
+QLabel#plus {{ color: {MUTED}; font-size: {px(12)}px; }}
+QLabel#glyph {{ background: {ACCENT_DIM}; color: {ACCENT}; border-radius: {px(10)}px; font-size: {px(20)}px; font-weight: 700; min-width: {px(40)}px; max-width: {px(40)}px; min-height: {px(40)}px; max-height: {px(40)}px; }}
+QLabel#glyphDanger {{ background: #3a1d20; color: {DANGER}; border-radius: {px(10)}px; font-size: {px(20)}px; font-weight: 700; min-width: {px(40)}px; max-width: {px(40)}px; min-height: {px(40)}px; max-height: {px(40)}px; }}
+QFrame#actionCard {{ background: {CARD}; border: 1px solid {LINE}; border-radius: {px(14)}px; }}
+QFrame#actionCard:hover {{ border-color: {ACCENT}; background: #19212b; }}
+QFrame#actionCard QLabel {{ background: transparent; }}
+QLabel#chip {{ background: #1c2330; border: 1px solid {LINE}; border-radius: {px(11)}px; padding: {px(3)}px {px(10)}px; color: {MUTED}; font-size: {px(12)}px; }}
+QLabel#statusOk {{ color: {ACCENT}; font-weight: 600; font-size: {px(15)}px; }}
+QLabel#statusBad {{ color: #ebb43c; font-weight: 600; font-size: {px(15)}px; }}
+QLabel#tip {{ color: #b6bfcc; font-size: {px(13)}px; }}
 QSlider::groove:horizontal {{ height: {px(6)}px; background: {LINE}; border-radius: {px(3)}px; }}
 QSlider::sub-page:horizontal {{ background: {ACCENT}; border-radius: {px(3)}px; }}
 QSlider::handle:horizontal {{ background: #fff; width: {px(16)}px; height: {px(16)}px; margin: -{px(5)}px 0; border-radius: {px(8)}px; }}
@@ -188,6 +201,61 @@ class HotkeyEdit(QPushButton):
         self.changed.emit(self.value)
 
 
+def fill_keycaps(lay: QHBoxLayout, spec: str) -> None:
+    while lay.count():
+        it = lay.takeAt(0)
+        w = it.widget()
+        if w:
+            w.deleteLater()
+    parts = [p for p in spec.split("+") if p]
+    for i, part in enumerate(parts):
+        if i:
+            lay.addWidget(label("+", "plus"))
+        lay.addWidget(label(part, "key"))
+    lay.addStretch(1)
+
+
+class KeyCaps(QWidget):
+    def __init__(self, spec: str = ""):
+        super().__init__()
+        self.lay = QHBoxLayout(self)
+        self.lay.setContentsMargins(0, 0, 0, 0)
+        self.lay.setSpacing(px(4))
+        self.set_spec(spec)
+
+    def set_spec(self, spec: str) -> None:
+        fill_keycaps(self.lay, spec)
+
+
+class ActionCard(QFrame):
+    clicked = Signal()
+
+    def __init__(self, glyph: str, title: str, desc: str, danger: bool = False):
+        super().__init__()
+        self.setObjectName("actionCard")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(px(18), px(16), px(18), px(16))
+        lay.setSpacing(px(10))
+        top = QHBoxLayout()
+        top.setSpacing(px(12))
+        g = label(glyph, "glyphDanger" if danger else "glyph")
+        g.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        top.addWidget(g)
+        col = QVBoxLayout()
+        col.setSpacing(px(1))
+        col.addWidget(label(title, "h2"))
+        col.addWidget(label(desc, "muted", wrap=True))
+        top.addLayout(col, 1)
+        lay.addLayout(top)
+        self.keys = KeyCaps()
+        lay.addWidget(self.keys)
+
+    def mousePressEvent(self, e) -> None:  # noqa: N802
+        if e.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+
+
 def card() -> tuple[QFrame, QVBoxLayout]:
     f = QFrame()
     f.setObjectName("card")
@@ -222,6 +290,8 @@ def row(title: str, hint: str, control: QWidget) -> QWidget:
     if hint:
         col.addWidget(label(hint, "muted", wrap=True))
     h.addLayout(col, 1)
+    if hint and not control.toolTip():
+        control.setToolTip(hint)
     h.addWidget(control, 0, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
     return w
 
@@ -294,8 +364,16 @@ class SettingsWindow(QWidget):
         self.nav = QListWidget()
         self.nav.setObjectName("nav")
         self.nav.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        for t in ("Главная", "Горячие клавиши", "Перевод", "Отображение", "Распознавание", "Обновления", "О программе"):
-            self.nav.addItem(QListWidgetItem(t))
+        for t, tip in (("⌂   Главная", "Быстрые действия и все горячие клавиши"),
+                       ("⌨   Горячие клавиши", "Изменить сочетания клавиш"),
+                       ("文   Перевод", "Движок перевода и ключи"),
+                       ("◐   Отображение", "Вид плашек с переводом"),
+                       ("◎   Распознавание", "Настройки OCR"),
+                       ("⟳   Обновления", "Проверка и установка новых версий"),
+                       ("ⓘ   О программе", "Автозапуск, глоссарий, античит")):
+            it = QListWidgetItem(t)
+            it.setToolTip(tip)
+            self.nav.addItem(it)
         sl.addWidget(self.nav, 1)
         sl.addWidget(label(f"версия {__version__}", "version"), 0, Qt.AlignmentFlag.AlignHCenter)
 
@@ -321,6 +399,7 @@ class SettingsWindow(QWidget):
         root.addWidget(right_w, 1)
 
         self._building = False
+        self.refresh_home()
         self._refresh_dirty()
 
     # --------------------------------------------------------------- save bar
@@ -337,6 +416,8 @@ class SettingsWindow(QWidget):
         self.btn_save = QPushButton("Сохранить")
         self.btn_save.setObjectName("primary")
         self.btn_save.clicked.connect(self.save)
+        self.btn_save.setToolTip("Применить и сохранить изменения")
+        self.btn_reset.setToolTip("Вернуть последние сохранённые настройки")
         h.addWidget(self.btn_reset)
         h.addWidget(self.btn_save)
         return bar
@@ -377,6 +458,7 @@ class SettingsWindow(QWidget):
         for key, sw in self.switches.items():
             sw.setChecked(bool(self._switch_get(key)))
         self._building = False
+        self.refresh_home()
         self._refresh_dirty()
 
     def sync_after_external_change(self) -> None:
@@ -387,47 +469,136 @@ class SettingsWindow(QWidget):
 
     # ------------------------------------------------------------------ pages
     def _page_home(self) -> QWidget:
-        sc, lay = page("Главная", "Управляйте переводом отсюда или горячими клавишами. Окно скроется на время снимка.")
+        sc, lay = page("Главная", "")
+        # --- статус
+        sc_card, sl = card()
+        top = QHBoxLayout()
+        top.setSpacing(px(12))
+        self.status_label = label("● Готово к работе", "statusOk")
+        top.addWidget(self.status_label)
+        top.addStretch(1)
+        self.chip_mode = label("", "chip")
+        self.chip_engine = label("", "chip")
+        top.addWidget(self.chip_mode)
+        top.addWidget(self.chip_engine)
+        sl.addLayout(top)
+        self.status_sub = label("Нажмите горячую клавишу в игре или карточку ниже — окно скроется на время снимка.", "muted", wrap=True)
+        sl.addWidget(self.status_sub)
+        lay.addWidget(sc_card)
+
+        # --- действия
+        cards = QHBoxLayout()
+        cards.setSpacing(px(14))
+        self.action_cards: dict[str, ActionCard] = {}
+        for key, glyph, title, desc, hk, danger, tip in (
+            ("full", "⛶", "Весь экран", "Перевести монитор, где курсор", "full_screen", False,
+             "Снимок всего монитора и перевод всех найденных китайских надписей"),
+            ("region", "▭", "Область", "Выделить текст мышью", "region", False,
+             "Выделите рамкой только нужный текст — точнее и быстрее. Esc отменяет"),
+            ("clear", "✕", "Убрать перевод", "Скрыть плашки и панель", "clear", True,
+             "Убирает перевод с экрана. Работает и из игры — по горячей клавише"),
+        ):
+            c = ActionCard(glyph, title, desc, danger)
+            c.setToolTip(tip)
+            c.clicked.connect(lambda k=key: self.action.emit(k))
+            c.hk_name = hk
+            self.action_cards[key] = c
+            cards.addWidget(c, 1)
+        lay.addLayout(cards)
+
+        # --- все горячие клавиши
+        kc, kl = card()
+        head = QHBoxLayout()
+        head.addWidget(label("Горячие клавиши", "h2"), 1)
+        edit = QPushButton("Изменить")
+        edit.setToolTip("Открыть настройку сочетаний клавиш")
+        edit.clicked.connect(lambda: self.nav.setCurrentRow(1))
+        head.addWidget(edit)
+        kl.addLayout(head)
         grid = QGridLayout()
-        grid.setSpacing(px(14))
-        self.action_btns: dict[str, QPushButton] = {}
-        for i, (key, title, desc) in enumerate([
-            ("full", "Перевести весь экран", "Снять монитор, где курсор"),
-            ("region", "Перевести область", "Выделить текст мышью"),
-            ("clear", "Убрать перевод", "Скрыть плашки и панель"),
-        ]):
-            b = QPushButton(f"{title}\n{desc}")
-            b.setObjectName("action")
-            b.setCursor(Qt.CursorShape.PointingHandCursor)
-            b.setMinimumHeight(px(78))
-            b.clicked.connect(lambda _=False, k=key: self.action.emit(k))
-            self.action_btns[key] = b
-            grid.addWidget(b, 0, i)
-        lay.addLayout(grid)
-        self.hint_card, hl = card()
+        grid.setHorizontalSpacing(px(24))
+        grid.setVerticalSpacing(px(10))
+        self.home_keys: dict[str, KeyCaps] = {}
+        for i, (name, title, hint) in enumerate(HOTKEY_INFO):
+            lb = label(title, "")
+            lb.setToolTip(hint)
+            kcp = KeyCaps()
+            kcp.setToolTip(hint)
+            self.home_keys[name] = kcp
+            grid.addWidget(lb, i, 0)
+            grid.addWidget(kcp, i, 1)
+        grid.setColumnStretch(1, 1)
+        kl.addLayout(grid)
+        lay.addWidget(kc)
+
+        # --- режим
         self.mode_btns: dict[str, QPushButton] = {}
         seg = QHBoxLayout()
         seg.setSpacing(0)
         grp = QButtonGroup(self)
-        for key, text in (("overlay", "Поверх игры"), ("panel", "Отдельная панель")):
+        for key, text, tip in (("overlay", "Поверх игры", "Плашки рисуются прямо над текстом игры"),
+                               ("panel", "Отдельная панель", "Список перевода в отдельном окне — удобно на втором мониторе")):
             b = QPushButton(text)
             b.setObjectName("seg")
             b.setCheckable(True)
+            b.setToolTip(tip)
             grp.addButton(b)
             b.clicked.connect(lambda _=False, k=key: self._set("display.mode", k))
             self.mode_btns[key] = b
             seg.addWidget(b)
         segw = QWidget()
         segw.setLayout(seg)
-        hl.addWidget(row("Режим показа", "Панель на втором мониторе — самый безопасный вариант для античита.", segw))
-        lay.addWidget(self.hint_card)
-        c, cl = card()
-        cl.addWidget(label("Как читать результат", "h2"))
-        cl.addWidget(label("<span style='color:#46c878'>●</span> перевод из лор-глоссария (точный)<br>"
-                           "<span style='color:#ebb43c'>●</span> машинный перевод — проверяйте по смыслу", "muted", wrap=True))
-        lay.addWidget(c)
+        mc, ml = card()
+        ml.addWidget(row("Режим показа", "Панель на втором мониторе — самый безопасный вариант для античита.", segw))
+        lay.addWidget(mc)
+
+        # --- подсказки
+        tc, tl = card()
+        tl.addWidget(label("Подсказки", "h2"))
+        self.tip_labels: list[tuple[QLabel, str]] = []
+        for text in (
+            "<b>Как убрать перевод:</b> {clear} или кнопка «Убрать перевод». Автоскрытие настраивается в «Отображении».",
+            "<b>Плашек не видно поверх игры?</b> Включите в игре «Окно без рамки» или нажмите {toggle_mode} — перевод откроется отдельным окном.",
+            "<b>Только часть экрана:</b> {region}, затем выделите текст мышью. Esc — отмена.",
+            "<b>Окно закрыто — программа работает:</b> значок «译» в трее у часов. Выход: {quit} или правый клик по значку.",
+            "<span style='color:#46c878'>●</span> перевод из лор-глоссария (точный) &nbsp; <span style='color:#ebb43c'>●</span> машинный — проверяйте по смыслу.",
+        ):
+            lb = label("", "tip", wrap=True)
+            lb.setTextFormat(Qt.TextFormat.RichText)
+            self.tip_labels.append((lb, text))
+            tl.addWidget(lb)
+        lay.addWidget(tc)
         lay.addStretch(1)
         return sc
+
+    def refresh_home(self) -> None:
+        """Обновляет бинды, подсказки и сводку на главной по сохранённой конфигурации."""
+        hk = self.cfg["hotkeys"]
+        for c in self.action_cards.values():
+            c.keys.set_spec(hk[c.hk_name])
+        for name, kcp in self.home_keys.items():
+            kcp.set_spec(hk[name])
+
+        def fmt(spec: str) -> str:
+            return f"<b style='color:#2fd69b'>{spec}</b>"
+
+        for lb, text in self.tip_labels:
+            lb.setText(text.format(**{k: fmt(v) for k, v in hk.items()}))
+        self.chip_mode.setText("Поверх игры" if self.cfg["display"]["mode"] == "overlay" else "Отдельная панель")
+        eng = {"google": "Google", "deepl": "DeepL", "claude": "Claude"}.get(self.cfg["engine"], self.cfg["engine"])
+        self.chip_engine.setText(f"Движок: {eng}")
+
+    def set_hotkey_status(self, errors: list[str]) -> None:
+        if errors:
+            self.status_label.setText("⚠ Часть горячих клавиш не работает")
+            self.status_label.setObjectName("statusBad")
+            self.status_sub.setText("; ".join(errors) + ". Измените сочетание в разделе «Горячие клавиши».")
+        else:
+            self.status_label.setText("● Готово к работе")
+            self.status_label.setObjectName("statusOk")
+            self.status_sub.setText("Нажмите горячую клавишу в игре или карточку ниже — окно скроется на время снимка.")
+        self.status_label.style().unpolish(self.status_label)
+        self.status_label.style().polish(self.status_label)
 
     def _page_hotkeys(self) -> QWidget:
         sc, lay = page("Горячие клавиши", "Нажмите на поле и введите новое сочетание. Нужен хотя бы один модификатор: Ctrl, Alt, Shift или Win.")
@@ -435,6 +606,7 @@ class SettingsWindow(QWidget):
         self.hk_edits: dict[str, HotkeyEdit] = {}
         for i, (name, title, hint) in enumerate(HOTKEY_INFO):
             e = HotkeyEdit(self.draft["hotkeys"][name])
+            e.setToolTip("Нажмите и введите новое сочетание. Esc — отмена")
             e.changed.connect(lambda v, n=name: self._set(f"hotkeys.{n}", v))
             e.capturing.connect(self.hotkey_capture.emit)
             self.hk_edits[name] = e
@@ -561,7 +733,7 @@ class SettingsWindow(QWidget):
 
     _SWITCHES = {
         "dots": "display.show_source_dots", "on_top": "display.panel_always_on_top",
-        "merge": "ocr.merge_lines", "upscale": "ocr.region_upscale", "auto_update": "updates.auto",
+        "merge": "ocr.merge_lines", "upscale": "ocr.region_upscale", "auto_update": "updates.auto", "hint": "display.show_hint",
     }
 
     def _switch_row(self, key: str, title: str, hint: str) -> QWidget:
@@ -584,6 +756,8 @@ class SettingsWindow(QWidget):
         cl.addWidget(self._slider_row("auto_hide", "display.auto_hide_sec", "Автоскрытие", "Через сколько секунд убирать перевод. 0 — не убирать.", 0, 60, lambda v: "выкл" if v == 0 else f"{v} с"))
         lay.addWidget(c)
         c2, c2l = card()
+        c2l.addWidget(self._switch_row("hint", "Подсказка «как убрать перевод»", "Маленькая надпись с горячей клавишей, пока перевод на экране."))
+        c2l.addWidget(sep())
         c2l.addWidget(self._switch_row("dots", "Цветные точки источника", "Зелёная — глоссарий, жёлтая — машинный перевод."))
         c2l.addWidget(sep())
         c2l.addWidget(self._switch_row("on_top", "Панель поверх всех окон", "Применится сразу после сохранения."))
@@ -699,6 +873,28 @@ class SettingsWindow(QWidget):
             node = node[p]
         node[parts[-1]] = value
         self._refresh_dirty()
+
+    def showEvent(self, e) -> None:  # noqa: N802
+        super().showEvent(e)
+        self._dark_title_bar()
+
+    def _dark_title_bar(self) -> None:
+        """Тёмный заголовок окна в Windows 10/11 (иначе он светлый/цветной и выбивается из дизайна)."""
+        import sys
+        if not sys.platform.startswith("win"):
+            return
+        try:
+            import ctypes
+            hwnd = int(self.winId())
+            dwm = ctypes.windll.dwmapi  # type: ignore[attr-defined]
+            one = ctypes.c_int(1)
+            dwm.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(one), 4)  # DWMWA_USE_IMMERSIVE_DARK_MODE
+            cap = ctypes.c_int(0x0016110E)  # цвет заголовка #0e1116 (BGR), Windows 11
+            dwm.DwmSetWindowAttribute(hwnd, 35, ctypes.byref(cap), 4)
+            txt = ctypes.c_int(0x00F0EBE8)
+            dwm.DwmSetWindowAttribute(hwnd, 36, ctypes.byref(txt), 4)
+        except Exception:  # noqa: BLE001
+            pass
 
     def closeEvent(self, e) -> None:  # noqa: N802
         e.ignore()  # закрытие окна = свернуть в трей

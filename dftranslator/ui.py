@@ -54,6 +54,7 @@ class OverlayWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.placed: list[Placed] = []
+        self.hint = ""
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self.clear)
@@ -67,8 +68,9 @@ class OverlayWindow(QWidget):
         rect = QFontMetrics(self._font(font_px)).boundingRect(QRect(0, 0, max(10, max_w), 10000), TEXT_FLAGS, text)
         return rect.width(), rect.height()
 
-    def show_items(self, screen: QRect, items: list[Item]) -> None:
+    def show_items(self, screen: QRect, items: list[Item], hint: str = "") -> None:
         d = self.cfg["display"]
+        self.hint = hint if d.get("show_hint", True) else ""
         self.setGeometry(screen)
         self.placed = place(
             items, screen.width(), screen.height(), self._measure,
@@ -83,6 +85,7 @@ class OverlayWindow(QWidget):
 
     def clear(self) -> None:
         self.placed = []
+        self.hint = ""
         self.hide()
 
     def paintEvent(self, _event) -> None:  # noqa: N802
@@ -102,6 +105,17 @@ class OverlayWindow(QWidget):
                 p.setPen(Qt.PenStyle.NoPen)
                 p.setBrush(LORE_DOT if it.lore else MACHINE_DOT)
                 p.drawEllipse(rect.right() - 9, rect.top() + 3, 6, 6)
+        if self.hint:  # подсказка, как убрать перевод
+            f = self._font(14)
+            fm = QFontMetrics(f)
+            w, h = fm.horizontalAdvance(self.hint) + 28, fm.height() + 14
+            r = QRect((self.width() - w) // 2, self.height() - h - 24, w, h)
+            p.setPen(QPen(QColor(34, 197, 139, 220), 1))
+            p.setBrush(QColor(16, 18, 24, 235))
+            p.drawRoundedRect(r, h / 2, h / 2)
+            p.setFont(f)
+            p.setPen(QColor(232, 235, 240))
+            p.drawText(r, CENTER_FLAGS, self.hint)
         p.end()
 
 
@@ -136,8 +150,10 @@ class PanelWindow(QWidget):
         if was_visible:
             self.show()
 
-    def show_items(self, items: list[Item]) -> None:
+    def show_items(self, items: list[Item], hint: str = "") -> None:
         rows = []
+        if hint and self.cfg["display"].get("show_hint", True):
+            rows.append(f"<div style='color:#2fd69b;margin:0 0 14px 0'>{html.escape(hint)}</div>")
         for it in sorted(items, key=lambda i: (round(i.y0 / 12), i.x0)):
             dot = "#46c878" if it.lore else "#ebb43c"
             ru = html.escape(it.ru) if it.ru else "<i style='color:#c66'>нет перевода</i>"

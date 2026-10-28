@@ -34,6 +34,7 @@ DEFAULTS: dict = {
         "auto_hide_sec": 0,
         "panel_always_on_top": True,
         "show_source_dots": True,
+        "show_hint": True,
     },
     "updates": {
         "auto": True,   # скачивать и ставить обновления тихо, когда программа не занята
