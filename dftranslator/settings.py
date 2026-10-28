@@ -557,7 +557,7 @@ class SettingsWindow(QWidget):
         tl.addWidget(label("Подсказки", "h2"))
         self.tip_labels: list[tuple[QLabel, str]] = []
         for text in (
-            "<b>Как убрать перевод:</b> {clear} или кнопка «Убрать перевод». Автоскрытие настраивается в «Отображении».",
+            "<b>Как убрать перевод:</b> он сам пропадает через 1–2 секунды после любого нажатия клавиши или мыши (настраивается в «Отображении»). Сразу убрать — {clear}.",
             "<b>Плашек не видно поверх игры?</b> Включите в игре «Окно без рамки» или нажмите {toggle_mode} — перевод откроется отдельным окном.",
             "<b>Только часть экрана:</b> {region}, затем выделите текст мышью. Esc — отмена.",
             "<b>Окно закрыто — программа работает:</b> значок «译» в трее у часов. Выход: {quit} или правый клик по значку.",
@@ -710,7 +710,7 @@ class SettingsWindow(QWidget):
 
     _SLIDERS = {
         "min_font": ("display.min_font_px", 1), "max_font": ("display.max_font_px", 1),
-        "opacity": ("display.opacity", 100), "auto_hide": ("display.auto_hide_sec", 1),
+        "opacity": ("display.opacity", 100), "auto_hide": ("display.auto_hide_sec", 1), "hide_delay": ("display.hide_delay_sec", 2),
         "min_score": ("ocr.min_score", 100),
     }
 
@@ -733,7 +733,7 @@ class SettingsWindow(QWidget):
 
     _SWITCHES = {
         "dots": "display.show_source_dots", "on_top": "display.panel_always_on_top",
-        "merge": "ocr.merge_lines", "upscale": "ocr.region_upscale", "auto_update": "updates.auto", "hint": "display.show_hint",
+        "merge": "ocr.merge_lines", "upscale": "ocr.region_upscale", "auto_update": "updates.auto", "hint": "display.show_hint", "hide_on_input": "display.hide_on_input",
     }
 
     def _switch_row(self, key: str, title: str, hint: str) -> QWidget:
@@ -752,6 +752,13 @@ class SettingsWindow(QWidget):
         cl.addWidget(self._slider_row("max_font", "display.max_font_px", "Максимальный шрифт", "Потолок размера для крупных надписей.", 12, 40, lambda v: f"{v} px"))
         cl.addWidget(sep())
         cl.addWidget(self._slider_row("opacity", "display.opacity", "Непрозрачность плашек", "Ниже — виднее игра под переводом.", 30, 100, lambda v: f"{v} %"))
+        cl.addWidget(sep())
+        cl.addWidget(self._switch_row("hide_on_input", "Убирать перевод после нажатия",
+                                      "Любая клавиша или кнопка мыши (в том числе ЛКМ в игре) скрывает перевод — без Ctrl+Alt+C."))
+        cl.addWidget(sep())
+        cl.addWidget(self._slider_row("hide_delay", "display.hide_delay_sec", "Задержка скрытия",
+                                      "Через сколько секунд после нажатия перевод пропадёт.", 1, 10,
+                                      lambda v: f"{v / 2:g} с"))
         cl.addWidget(sep())
         cl.addWidget(self._slider_row("auto_hide", "display.auto_hide_sec", "Автоскрытие", "Через сколько секунд убирать перевод. 0 — не убирать.", 0, 60, lambda v: "выкл" if v == 0 else f"{v} с"))
         lay.addWidget(c)

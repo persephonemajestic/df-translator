@@ -35,6 +35,8 @@ DEFAULTS: dict = {
         "panel_always_on_top": True,
         "show_source_dots": True,
         "show_hint": True,
+        "hide_on_input": True,     # убирать перевод после любого нажатия клавиши/кнопки мыши
+        "hide_delay_sec": 1.5,     # через сколько секунд после нажатия
     },
     "updates": {
         "auto": True,   # скачивать и ставить обновления тихо, когда программа не занята

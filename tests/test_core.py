@@ -333,3 +333,12 @@ def test_updater_versions_and_release_parsing():
     })
     assert rel and rel.version == "1.1.0" and rel.url == "u1" and rel.sha256 == "abc"
     assert parse_release({"tag_name": "v1", "assets": []}) is None
+
+
+def test_input_watch_detects_only_new_presses():
+    from dftranslator.inputwatch import detect_new_press
+
+    assert not detect_new_press(frozenset({0x11, 0x43}), frozenset({0x11, 0x43}))   # удержание — не нажатие
+    assert not detect_new_press(frozenset({0x11, 0x43}), frozenset())               # отпустили
+    assert detect_new_press(frozenset(), frozenset({0x01}))                          # ЛКМ
+    assert detect_new_press(frozenset({0x11}), frozenset({0x11, 0x57}))              # добавилась W

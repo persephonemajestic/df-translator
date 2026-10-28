@@ -16,7 +16,7 @@ from PySide6.QtCore import QObject, QRect, QTimer, QUrl, Signal  # noqa: E402
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QFont, QIcon, QPainter, QPixmap  # noqa: E402
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon  # noqa: E402
 
-from . import __version__, capture, updater  # noqa: E402
+from . import __version__, capture, inputwatch, updater  # noqa: E402
 from .blocks import group_blocks  # noqa: E402
 from .config import _merge, config_dir, load_config, save_config  # noqa: E402
 from .glossary import Glossary  # noqa: E402
@@ -111,6 +111,14 @@ class TranslatorApp:
         self.bridge.update_state.connect(self.settings.set_update_state)
         self.upool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dft-update")
         self.pending_update = None  # путь к скачанному и проверенному файлу
+        # автоскрытие перевода после нажатия клавиши / кнопки мыши
+        self._shown_gen = 0
+        self._input_prev = frozenset()
+        self._input_armed_at = 0.0
+        self._input_timer = QTimer(self.qt)
+        self._input_timer.setInterval(40)
+        self._input_timer.timeout.connect(self._poll_input)
+        self._hide_scheduled = False
         self._update_info = None
         self.bridge.test_done.connect(self.settings.set_test_result)
 
@@ -348,7 +356,33 @@ class TranslatorApp:
         save_config(self.cfg)
         self.say("Движок перевода: " + ENGINE_TITLES.get(name, name))
 
+    def _start_input_watch(self) -> None:
+        self._shown_gen += 1
+        self._hide_scheduled = False
+        if self.cfg["display"]["mode"] == "overlay" and self.cfg["display"].get("hide_on_input", True):
+            self._input_prev = inputwatch.pressed_keys()  # уже зажатые клавиши (в т.ч. хоткей перевода) не считаем
+            self._input_armed_at = time.monotonic() + 0.5
+            self._input_timer.start()
+
+    def _poll_input(self) -> None:
+        cur = inputwatch.pressed_keys()
+        new = inputwatch.detect_new_press(self._input_prev, cur)
+        self._input_prev = cur
+        if not new or time.monotonic() < self._input_armed_at or self._hide_scheduled:
+            return
+        self._hide_scheduled = True
+        gen = self._shown_gen
+        delay = int(float(self.cfg["display"].get("hide_delay_sec", 1.5)) * 1000)
+        QTimer.singleShot(delay, lambda: self._auto_hide(gen))
+
+    def _auto_hide(self, gen: int) -> None:
+        if gen == self._shown_gen and self.overlay.isVisible():
+            self.overlay.clear()
+        self._input_timer.stop()
+
     def clear_all(self) -> None:
+        self._input_timer.stop()
+        self._shown_gen += 1
         self.overlay.clear()
         self.panel.hide()
 
@@ -453,11 +487,16 @@ class TranslatorApp:
             self.busy = False
 
     def on_results(self, monitor: QRect, items: list[Item]) -> None:
-        hint = f"{self.cfg['hotkeys']['clear']} — убрать перевод"
+        clear_key = self.cfg["hotkeys"]["clear"]
+        if self.cfg["display"].get("hide_on_input", True) and self.cfg["display"]["mode"] == "overlay":
+            hint = f"Исчезнет после любого нажатия · {clear_key} — убрать сразу"
+        else:
+            hint = f"{clear_key} — убрать перевод"
         if self.cfg["display"]["mode"] == "panel":
             self.panel.show_items(items, hint)
         else:
             self.overlay.show_items(monitor, items, hint)
+            self._start_input_watch()
 
     # ------------------------------------------------------------- lifecycle
     def _shutdown(self) -> None:
