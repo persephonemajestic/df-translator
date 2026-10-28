@@ -514,6 +514,7 @@ class SettingsWindow(QWidget):
         self.nav = QListWidget()
         self.nav.setObjectName("nav")
         self.nav.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.nav.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.quest_db = None
         self.history = None
         pages = [
@@ -558,8 +559,7 @@ class SettingsWindow(QWidget):
         root.addWidget(right_w, 1)
 
         self._building = False
-        self.refresh_home()
-        self._refresh_dirty()
+        self.load_from_draft()
         self._apply_layout()
 
     # ------------------------------------------------------------ адаптивность
@@ -578,6 +578,8 @@ class SettingsWindow(QWidget):
             self.brand_label.setText("译" if compact else "译  DF Translator")
             self.brand_box.setContentsMargins(px(22) if not compact else px(20), 0, px(16) if not compact else 0, px(18))
             self.ver_label.setText(__version__ if compact else f"v{__version__} · by LastNova")
+            self.nav.setStyleSheet(
+                f"QListWidget#nav::item {{ padding: {px(9)}px 0; margin: {px(2)}px {px(8)}px; }}" if compact else "")
             for i, t in enumerate(self.nav_texts):
                 it = self.nav.item(i)
                 it.setText(t.split()[0] if compact else t)
@@ -589,6 +591,12 @@ class SettingsWindow(QWidget):
             self.cards_lay.setDirection(QBoxLayout.Direction.TopToBottom if narrow else QBoxLayout.Direction.LeftToRight)
         if hasattr(self, "q_hint"):
             self.q_hint.setVisible(content >= px(860))
+            # низкое окно: заголовок «Квесты» прячем — место нужнее списку
+            low = self.height() < px(640)
+            self.q_title.setVisible(not low)
+            self.q_hint.setVisible(content >= px(860) and not low)
+            self.q_page_lay.setContentsMargins(px(14) if narrow else px(24), px(10) if low else px(22),
+                                               px(14) if narrow else px(24), px(10) if low else px(16))
         m = px(16) if narrow else px(32)
         self.save_bar_lay.setContentsMargins(m, px(10), m, px(10))
         self.btn_reset.setText("Отменить" if narrow else "Отменить изменения")
@@ -821,7 +829,8 @@ class SettingsWindow(QWidget):
         lay.setSpacing(px(12))
         self.q_page_lay = lay
         head = QHBoxLayout()
-        head.addWidget(label("Квесты", "h1"))
+        self.q_title = label("Квесты", "h1")
+        head.addWidget(self.q_title)
         head.addStretch(1)
         self.q_hint = label("В игре: откройте задание и нажмите «Гид по квесту» — оно откроется здесь", "muted")
         head.addWidget(self.q_hint)

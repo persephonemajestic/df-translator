@@ -356,7 +356,7 @@ MAP_ORDER = ["零号大坝", "长弓溪谷", "航天基地", "巴克什", "潮�
 SEASON_STAGES = {1: "沉舟", 2: "星火", 3: "面具", 4: "众生"}   # запасные названия, если нет season_meta.json
 
 # Ширина справочника, при которой меняется раскладка
-WIDE_MIN = 1000     # рельс + список + карточка
+WIDE_MIN = 900      # рельс + список + карточка
 SPLIT_MIN = 640     # выпадающий список разделов + список + карточка; уже — список ИЛИ карточка
 
 
@@ -488,6 +488,7 @@ class QuestBrowser(QWidget):
         changed = mode != self._mode
         self._mode = mode
         self.rail_scroll.setVisible(mode == "wide")
+        self.unlock.setVisible(bool(self.unlock.text()) and self.height() >= px(480))
         self.combo.setVisible(mode != "wide")
         if mode == "narrow":
             self.midw.setMinimumWidth(0)
@@ -496,7 +497,8 @@ class QuestBrowser(QWidget):
             self.card.setVisible(self._card_open)
             self.card.setMinimumWidth(0)
         else:
-            list_w = px(330) if mode == "wide" else max(px(250), min(px(330), int(w * 0.4)))
+            free = w - (px(208) if mode == "wide" else 0)
+            list_w = max(px(250), min(px(330), int(free * 0.42)))
             self.midw.setFixedWidth(list_w)
             self.midw.setVisible(True)
             self.card.setVisible(True)
@@ -657,7 +659,8 @@ class QuestBrowser(QWidget):
         if self.section.startswith("season:") and not searching and hasattr(self.db, "stage_unlock"):
             unlock = self.db.stage_unlock(int(self.section.split(":")[1]))
         self.unlock.setText("🔓 " + unlock if unlock else "")
-        self.unlock.setVisible(bool(unlock))
+        self.unlock.setVisible(bool(unlock) and self.height() >= px(480))
+        self.combo.setToolTip(unlock or "Раздел: отдел или этап сезона")
         for title, items in self._groups():
             done_ids = [q.id for q in items if self.progress.is_done(q.id)]
             closed = bool(items) and len(done_ids) == len(items)
