@@ -9,11 +9,16 @@ from pathlib import Path
 
 APP_NAME = "DFTranslator"
 
+CONFIG_REV = 2  # 2: безопасный режим «снимок» по умолчанию
+
 DEFAULTS: dict = {
+    "rev": CONFIG_REV,
     "hotkeys": {
         "full_screen": "Ctrl+Alt+T",
         "region": "Ctrl+Alt+R",
         "clear": "Ctrl+Alt+C",
+        "quest_guide": "Ctrl+Alt+G",
+        "under_cursor": "Ctrl+Alt+X",
         "toggle_mode": "Ctrl+Alt+M",
         "quit": "Ctrl+Alt+Q",
     },
@@ -25,9 +30,10 @@ DEFAULTS: dict = {
         "claude": {"api_key": "", "model": "claude-haiku-5-5"},
     },
     "display": {
-        # overlay — перевод поверх оригинала (прозрачное окно, клики проходят сквозь него)
-        # panel   — отдельное окно со списком (его можно вынести на второй монитор)
-        "mode": "overlay",
+        # snapshot — безопасный режим: обычное окно со снимком экрана и переводом, закрывается любой клавишей
+        # panel    — отдельное окно со списком (его можно вынести на второй монитор)
+        # overlay  — прозрачное окно поверх игры (удобно, но больше похоже на то, что ищут античиты)
+        "mode": "snapshot",
         "min_font_px": 11,
         "max_font_px": 22,
         "opacity": 0.93,
@@ -40,6 +46,7 @@ DEFAULTS: dict = {
     },
     "updates": {
         "auto": True,   # скачивать и ставить обновления тихо, когда программа не занята
+        "data_sync": True,  # подтягивать свежий словарь и базу квестов с GitHub без обновления программы
         "repo": "persephonemajestic/df-translator",
     },
     "ocr": {
@@ -76,7 +83,13 @@ def load_config(path: Path | None = None) -> dict:
         try:
             with path.open(encoding="utf-8") as f:
                 _merge(cfg, json.load(f))
-        except (OSError, ValueError):
+            with path.open(encoding="utf-8") as f:
+                stored_rev = int(json.load(f).get("rev", 1))
+            cfg["rev"] = CONFIG_REV
+            if stored_rev < 2:  # один раз переводим всех на безопасный режим
+                cfg["display"]["mode"] = "snapshot"
+                save_config(cfg, path)
+        except (OSError, ValueError, AttributeError):
             pass  # битый файл — работаем с настройками по умолчанию
     else:
         save_config(cfg, path)

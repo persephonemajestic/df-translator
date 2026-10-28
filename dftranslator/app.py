@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 import sys
 import time
@@ -16,7 +17,9 @@ from PySide6.QtCore import QObject, QRect, QTimer, QUrl, Signal  # noqa: E402
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QFont, QIcon, QLinearGradient, QPainter, QPixmap  # noqa: E402
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon  # noqa: E402
 
-from . import CREDIT, __version__, capture, inputwatch, updater  # noqa: E402
+from . import CREDIT, __version__, capture, datasync, inputwatch, updater  # noqa: E402
+from .history import History, issue_url  # noqa: E402
+from .questdb import QuestDB  # noqa: E402
 from .blocks import group_blocks  # noqa: E402
 from .config import _merge, config_dir, load_config, save_config  # noqa: E402
 from .glossary import Glossary  # noqa: E402
@@ -25,12 +28,19 @@ from .settings import SettingsWindow, detect_scale  # noqa: E402
 from .layout import Item  # noqa: E402
 from .ocr import OcrEngine, OcrUnavailable, region_scale  # noqa: E402
 from .quests import QuestBook  # noqa: E402
+from .text import norm_key  # noqa: E402
 from .translate import ENGINES, Translator, build_engine  # noqa: E402
-from .ui import OverlayWindow, PanelWindow, RegionSelector, Toast, frame_to_qimage, CENTER_FLAGS  # noqa: E402
+from .ui import OverlayWindow, PanelWindow, RegionSelector, SnapshotWindow, Toast, frame_to_qimage, CENTER_FLAGS  # noqa: E402
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
 DATA_DIR = ROOT / "data"
 HIDE_DELAY_MS = 90  # даём системе перерисовать экран без нашего оверлея перед снимком
+
+MODE_TITLES = {
+    "snapshot": "Безопасный снимок (рекомендуется)",
+    "panel": "Отдельная панель",
+    "overlay": "Поверх игры (прозрачный оверлей)",
+}
 
 ENGINE_TITLES = {
     "google": "Google (без ключа)",
@@ -45,6 +55,8 @@ class Bridge(QObject):
     status = Signal(str, bool)         # текст, это ошибка?
     test_done = Signal(bool, str)      # результат проверки движка
     update_state = Signal(object)      # dict для окна настроек
+    quest_found = Signal(str)          # id квеста, найденного на экране
+    data_updated = Signal(object)      # список обновлённых файлов словаря
 
 
 def make_icon() -> QIcon:
@@ -87,10 +99,17 @@ class TranslatorApp:
         self.cfg = load_config()
         user_dir = config_dir()
         self.user_dir = user_dir
-        self.glossary = Glossary(DATA_DIR, user_dir)
-        obj_user, obj_data = user_dir / "objectives_ru.json", DATA_DIR / "objectives_ru.json"
-        self.quests = QuestBook(self.glossary, obj_user if obj_user.exists() else obj_data)
+        self.data_overlay = user_dir / "data"  # свежий словарь с GitHub (см. datasync)
+        self.glossary = Glossary(DATA_DIR, user_dir, overlay_dir=self.data_overlay)
+        self.quest_db = QuestDB(DATA_DIR, self.data_overlay)
+        self.quest_db.set_names(self.glossary.lookup_quest_name)
+        obj_user = user_dir / "objectives_ru.json"
+        self.quests = QuestBook(self.glossary, obj_user if obj_user.exists() else None)
+        self.quests.add_objectives(self.quest_db.objectives)
         self.translator = Translator(self.glossary, self.quests, self.cfg, user_dir / "cache.json")
+        self.history = History()
+        self._quest_card = None
+        self._img_loader = None
         self.ocr = OcrEngine(self.cfg["ocr"]["min_score"])
 
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dft-worker")
@@ -99,6 +118,8 @@ class TranslatorApp:
         self._monitor_rect = QRect(0, 0, 1920, 1080)
 
         self.overlay = OverlayWindow(self.cfg)
+        self.snapshot = SnapshotWindow(self.cfg)
+        self._last_frame = None
         self.panel = PanelWindow(self.cfg)
         self.toast = Toast()
 
@@ -128,6 +149,13 @@ class TranslatorApp:
         self._hide_scheduled = False
         self._update_info = None
         self.bridge.test_done.connect(self.settings.set_test_result)
+        self.settings.open_quest.connect(self.open_quest)
+        self.settings.history_fix.connect(self.on_history_fix)
+        self.settings.history_clear.connect(self.on_history_clear)
+        self.settings.set_quest_db(self.quest_db)
+        self.settings.set_history(self.history)
+        self.bridge.quest_found.connect(self.open_quest)
+        self.bridge.data_updated.connect(self.on_data_updated)
 
         self._build_tray()
         self.hotkeys = self._new_listener()
@@ -140,6 +168,10 @@ class TranslatorApp:
         self._update_timer = QTimer(self.qt)
         self._update_timer.timeout.connect(lambda: self.check_updates(manual=False))
         self._update_timer.start(6 * 3600 * 1000)
+        QTimer.singleShot(20000, self.sync_data)
+        self._data_timer = QTimer(self.qt)
+        self._data_timer.timeout.connect(self.sync_data)
+        self._data_timer.start(3 * 3600 * 1000)
         self._apply_timer = QTimer(self.qt)
         self._apply_timer.timeout.connect(self._maybe_apply)
         self._apply_timer.start(30 * 1000)
@@ -177,12 +209,20 @@ class TranslatorApp:
         menu.addAction(f"Перевести весь экран ({hk['full_screen']})", self.translate_full)
         menu.addAction(f"Перевести выделенную область ({hk['region']})", self.translate_region)
         menu.addAction(f"Убрать перевод ({hk['clear']})", self.clear_all)
+        menu.addAction(f"Гид по квесту на экране ({hk['quest_guide']})", self.quest_guide)
+        menu.addSeparator()
+        menu.addAction("Квесты…", lambda: (self.show_settings(), self.settings.go("quests")))
+        menu.addAction("История переводов…", lambda: (self.show_settings(), self.settings.go("history")))
         menu.addSeparator()
 
-        self.mode_action = QAction("Режим: поверх игры (оверлей)", menu, checkable=True)
-        self.mode_action.setChecked(self.cfg["display"]["mode"] == "overlay")
-        self.mode_action.triggered.connect(lambda checked: self.set_mode("overlay" if checked else "panel"))
-        menu.addAction(self.mode_action)
+        mode_menu = menu.addMenu("Режим показа")
+        self.mode_actions: dict[str, QAction] = {}
+        for key, title in MODE_TITLES.items():
+            act = QAction(title, mode_menu, checkable=True)
+            act.setChecked(self.cfg["display"]["mode"] == key)
+            act.triggered.connect(lambda _=False, k=key: self.set_mode(k))
+            mode_menu.addAction(act)
+            self.mode_actions[key] = act
 
         eng_menu = menu.addMenu("Движок перевода")
         self.engine_actions: dict[str, QAction] = {}
@@ -244,6 +284,7 @@ class TranslatorApp:
 
     def _is_idle(self) -> bool:
         return not (self.busy or self.settings.isVisible() or self.overlay.isVisible() or self.panel.isVisible()
+                    or self.snapshot.isVisible()
                     or self._selector is not None and self._selector.isVisible())
 
     def _maybe_apply(self) -> None:
@@ -346,16 +387,19 @@ class TranslatorApp:
             "full_screen": self.translate_full,
             "region": self.translate_region,
             "clear": self.clear_all,
-            "toggle_mode": lambda: self.set_mode("panel" if self.cfg["display"]["mode"] == "overlay" else "overlay"),
+            "toggle_mode": lambda: self.set_mode("panel" if self.cfg["display"]["mode"] != "panel" else "snapshot"),
+            "quest_guide": self.quest_guide,
+            "under_cursor": self.translate_under_cursor,
             "quit": self.qt.quit,
         }.get(name, lambda: None)()
 
     def set_mode(self, mode: str) -> None:
         self.cfg["display"]["mode"] = mode
-        self.mode_action.setChecked(mode == "overlay")
+        for k, act in self.mode_actions.items():
+            act.setChecked(k == mode)
         self.settings.sync_after_external_change()
         self.clear_all()
-        self.say("Режим: " + ("поверх игры" if mode == "overlay" else "отдельная панель"))
+        self.say("Режим: " + MODE_TITLES.get(mode, mode))
         save_config(self.cfg)
 
     def set_engine(self, name: str) -> None:
@@ -370,15 +414,16 @@ class TranslatorApp:
         self._shown_gen += 1
         self._hide_scheduled = False
         if self.cfg["display"]["mode"] == "overlay" and self.cfg["display"].get("hide_on_input", True):
-            self._input_prev = inputwatch.pressed_keys()  # уже зажатые клавиши (в т.ч. хоткей перевода) не считаем
-            self._input_armed_at = time.monotonic() + 0.5
+            self._input_prev = (inputwatch.last_input_tick(), inputwatch.cursor_pos())
+            self._input_armed_at = time.monotonic() + 0.4
             self._input_timer.start()
 
     def _poll_input(self) -> None:
-        cur = inputwatch.pressed_keys()
-        new = inputwatch.detect_new_press(self._input_prev, cur)
-        self._input_prev = cur
-        if not new or time.monotonic() < self._input_armed_at or self._hide_scheduled:
+        cur = (inputwatch.last_input_tick(), inputwatch.cursor_pos())
+        prev, self._input_prev = self._input_prev, cur
+        if self._hide_scheduled or time.monotonic() < self._input_armed_at:
+            return
+        if not inputwatch.detect_press(prev[0], cur[0], prev[1], cur[1]):
             return
         self._hide_scheduled = True
         gen = self._shown_gen
@@ -394,6 +439,7 @@ class TranslatorApp:
         self._input_timer.stop()
         self._shown_gen += 1
         self.overlay.clear()
+        self.snapshot.clear()
         self.panel.hide()
 
     def open_config_dir(self) -> None:
@@ -414,6 +460,7 @@ class TranslatorApp:
         if self.busy:
             return
         self.overlay.hide()
+        self.snapshot.clear()
         self.toast.hide()
         QTimer.singleShot(HIDE_DELAY_MS, self._capture_full)
 
@@ -430,6 +477,7 @@ class TranslatorApp:
         if self.busy:
             return
         self.overlay.hide()
+        self.snapshot.clear()
         self.toast.hide()
         QTimer.singleShot(HIDE_DELAY_MS, self._capture_region)
 
@@ -454,6 +502,7 @@ class TranslatorApp:
 
     def _submit(self, full_frame, sub_frame, region: bool) -> None:
         self.busy = True
+        self._last_frame = full_frame
         self.say("Распознаю текст…")
         dx, dy = sub_frame.left - full_frame.left, sub_frame.top - full_frame.top
         self.pool.submit(self._job, sub_frame.image, dx, dy, region)
@@ -497,19 +546,168 @@ class TranslatorApp:
             self.busy = False
 
     def on_results(self, monitor: QRect, items: list[Item]) -> None:
+        mode = self.cfg["display"]["mode"]
         clear_key = self.cfg["hotkeys"]["clear"]
-        if self.cfg["display"].get("hide_on_input", True) and self.cfg["display"]["mode"] == "overlay":
+        if mode == "snapshot":
+            hint = "Любая клавиша или клик — закрыть"
+        elif mode == "overlay" and self.cfg["display"].get("hide_on_input", True):
             hint = f"Исчезнет после любого нажатия · {clear_key} — убрать сразу"
         else:
             hint = f"{clear_key} — убрать перевод"
-        if self.cfg["display"]["mode"] == "panel":
+        self._remember(items)
+        if mode == "panel":
             self.panel.show_items(items, hint)
+        elif mode == "snapshot" and self._last_frame is not None:
+            self.snapshot.show_snapshot(monitor, frame_to_qimage(self._last_frame), items, hint)
         else:
             self.overlay.show_items(monitor, items, hint)
             self._start_input_watch()
 
+    def _remember(self, items: list[Item]) -> None:
+        """История переводов для окна «История» и исправлений."""
+        for it in items:
+            if it.ru and it.zh and it.source not in ("skip", "error"):
+                self.history.add(it.zh, it.ru, it.source, it.lore)
+        if self.settings.isVisible():
+            self.settings.refresh_history()
+
+    # ------------------------------------------------- квесты и история
+    def _ensure_card(self):
+        if self._quest_card is None:
+            from .questui import ImageLoader, QuestCard
+
+            self._img_loader = ImageLoader(self.user_dir / "img_cache")
+            self._quest_card = QuestCard(
+                make_icon(), self._img_loader, self.quests.reward,
+                lambda qid: self.quest_db.get(qid),
+                lambda q: [x for x in self.quest_db.quests if x.dept == q.dept and x.parent == q.key],
+            )
+        return self._quest_card
+
+    def open_quest(self, quest_id: str) -> None:
+        q = self.quest_db.get(quest_id)
+        if q is None:
+            return
+        self.snapshot.clear()
+        self._ensure_card().show_quest(q)
+
+    def quest_guide(self) -> None:
+        """Ищет на экране название квеста из базы и открывает его карточку."""
+        if self.busy:
+            return
+        self.overlay.hide()
+        self.snapshot.clear()
+        self.toast.hide()
+        QTimer.singleShot(HIDE_DELAY_MS, self._capture_guide)
+
+    def _capture_guide(self) -> None:
+        try:
+            frame = capture.grab_monitor_at_cursor()
+        except Exception as exc:  # noqa: BLE001
+            self.say(f"Не удалось сделать снимок экрана: {exc}", True)
+            return
+        self._monitor_rect = QRect(frame.left, frame.top, frame.width, frame.height)
+        self.busy = True
+        self.say("Ищу квест на экране…")
+        self.pool.submit(self._guide_job, frame.image)
+
+    def _guide_job(self, image) -> None:
+        try:
+            lines = self.ocr.read(image, 1.0)
+            best = None
+            for ln in lines:
+                q = self.quest_db.match_name(ln.text)
+                if q is None:
+                    continue
+                score = ln.h + (1000 if norm_key(ln.text) == norm_key(q.name) else 0)
+                if best is None or score > best[0]:
+                    best = (score, q)
+            if best:
+                self.bridge.status.emit(f"Квест: {best[1].name_ru}", False)
+                self.bridge.quest_found.emit(best[1].id)
+            else:
+                self.bridge.status.emit("Квест на экране не найден — откройте описание задания в игре. "
+                                        "Сезонных квестов в базе пока нет.", True)
+        except OcrUnavailable as exc:
+            self.bridge.status.emit(str(exc), True)
+        except Exception as exc:  # noqa: BLE001
+            self.bridge.status.emit(f"{type(exc).__name__}: {exc}", True)
+        finally:
+            self.busy = False
+
+    def translate_under_cursor(self) -> None:
+        if self.busy:
+            return
+        self.overlay.hide()
+        self.snapshot.clear()
+        self.toast.hide()
+        QTimer.singleShot(HIDE_DELAY_MS, self._capture_under_cursor)
+
+    def _capture_under_cursor(self) -> None:
+        try:
+            frame = capture.grab_monitor_at_cursor()
+        except Exception as exc:  # noqa: BLE001
+            self.say(f"Не удалось сделать снимок экрана: {exc}", True)
+            return
+        self._monitor_rect = QRect(frame.left, frame.top, frame.width, frame.height)
+        cx, cy = capture.cursor_pos()
+        cx, cy = cx - frame.left, cy - frame.top
+        w, h = min(1000, frame.width), min(150, frame.height)
+        x = max(0, min(frame.width - w, cx - w // 2))
+        y = max(0, min(frame.height - h, cy - h // 2))
+        self._submit(frame, capture.crop(frame, x, y, w, h), region=True)
+
+    def on_history_fix(self, zh: str, ru: str, send: bool) -> None:
+        path = self.user_dir / "glossary_user.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        except (OSError, ValueError):
+            data = {}
+        old = next((e.ru for e in self.history.entries() if e.zh == zh), "")
+        data.setdefault("ui", {})[zh] = ru
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+        self.glossary.reload()
+        self.history.add(zh, ru, "glossary", True)
+        self.settings.refresh_history()
+        if send:
+            QDesktopServices.openUrl(QUrl(issue_url(self.cfg["updates"].get("repo", ""), zh, old, ru, __version__)))
+
+    def on_history_clear(self) -> None:
+        self.history.clear()
+        self.settings.refresh_history()
+
+    # ------------------------------------------------ словарь с GitHub
+    def sync_data(self) -> None:
+        if not self.cfg["updates"].get("data_sync", True):
+            return
+
+        def job() -> None:
+            try:
+                changed = datasync.sync(self.cfg["updates"].get("repo", ""), DATA_DIR, self.data_overlay)
+                if changed:
+                    self.bridge.data_updated.emit(changed)
+            except Exception:  # noqa: BLE001 — нет сети и т.п.: попробуем в следующий раз
+                pass
+
+        self.upool.submit(job)
+
+    def on_data_updated(self, changed) -> None:
+        self.glossary.reload()
+        self.quest_db = QuestDB(DATA_DIR, self.data_overlay)
+        self.quest_db.set_names(self.glossary.lookup_quest_name)
+        obj_user = self.user_dir / "objectives_ru.json"
+        self.quests = QuestBook(self.glossary, obj_user if obj_user.exists() else None)
+        self.quests.add_objectives(self.quest_db.objectives)
+        self.translator.q = self.quests
+        self.settings.set_quest_db(self.quest_db)
+        if self._quest_card is not None:
+            self._quest_card.reward_ru = self.quests.reward
+        self.tray.showMessage("DF Translator", "Словарь и база квестов обновлены", QSystemTrayIcon.MessageIcon.Information, 3000)
+
     # ------------------------------------------------------------- lifecycle
     def _shutdown(self) -> None:
+        if self._img_loader is not None:
+            self._img_loader.shutdown()
         self.hotkeys.stop()
         self.translator.cache.flush()
         self.pool.shutdown(wait=False, cancel_futures=True)

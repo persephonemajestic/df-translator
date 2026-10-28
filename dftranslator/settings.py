@@ -78,7 +78,7 @@ QPushButton#action:hover {{ border-color: {ACCENT}; background: #19212b; }}
 QPushButton#engine {{ text-align: left; padding: {px(14)}px {px(16)}px; border-radius: {px(12)}px; background: {CARD}; }}
 QPushButton#engine:hover {{ border-color: #3a4656; }}
 QPushButton#engine:checked {{ border: 1px solid {ACCENT}; background: {ACCENT_DIM}; }}
-QPushButton#seg {{ border-radius: 0; padding: {px(9)}px {px(20)}px; min-width: {px(130)}px; background: {CARD}; }}
+QPushButton#seg {{ border-radius: 0; padding: {px(9)}px {px(16)}px; min-width: {px(104)}px; background: {CARD}; }}
 QPushButton#seg:checked {{ background: {ACCENT}; color: #06231a; font-weight: 700; border-color: {ACCENT}; }}
 QPushButton#hotkey {{ font-family: Consolas, "Cascadia Mono", monospace; font-weight: 600; min-width: {px(170)}px; padding: {px(8)}px {px(14)}px; background: #0f141b; }}
 QPushButton#hotkey:hover {{ border-color: #3a4656; }}
@@ -316,6 +316,8 @@ HOTKEY_INFO = [
     ("full_screen", "Перевести весь экран", "Снимок монитора, на котором курсор"),
     ("region", "Перевести область", "Выделите прямоугольник мышью (Esc — отмена)"),
     ("clear", "Убрать перевод", "Скрыть плашки и панель"),
+    ("quest_guide", "Гид по квесту", "Откройте квест в игре и нажмите — появится карточка с целями и скриншотами мест"),
+    ("under_cursor", "Перевод под курсором", "Перевести строку текста вокруг курсора мыши"),
     ("toggle_mode", "Сменить режим", "Поверх игры ⇄ отдельная панель"),
     ("quit", "Выход", "Закрыть программу"),
 ]
@@ -334,6 +336,9 @@ class SettingsWindow(QWidget):
     maintenance = Signal(str)          # open_dir | reload_glossary | clear_cache
     check_updates = Signal()
     install_update = Signal()
+    open_quest = Signal(str)           # id квеста
+    history_fix = Signal(str, str, bool)  # оригинал, новый перевод, отправить автору
+    history_clear = Signal()
 
     def __init__(self, cfg: dict, icon):
         super().__init__()
@@ -364,13 +369,21 @@ class SettingsWindow(QWidget):
         self.nav = QListWidget()
         self.nav.setObjectName("nav")
         self.nav.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        for t, tip in (("⌂   Главная", "Быстрые действия и все горячие клавиши"),
-                       ("⌨   Горячие клавиши", "Изменить сочетания клавиш"),
-                       ("文   Перевод", "Движок перевода и ключи"),
-                       ("◐   Отображение", "Вид плашек с переводом"),
-                       ("◎   Распознавание", "Настройки OCR"),
-                       ("⟳   Обновления", "Проверка и установка новых версий"),
-                       ("ⓘ   О программе", "Автозапуск, глоссарий, античит")):
+        self.quest_db = None
+        self.history = None
+        pages = [
+            ("home", "⌂   Главная", "Быстрые действия и все горячие клавиши", self._page_home),
+            ("quests", "☰   Квесты", "Все задания отделов: цели, награды, скриншоты мест", self._page_quests),
+            ("history", "↺   История", "Последние переводы — скопировать или исправить", self._page_history),
+            ("hotkeys", "⌨   Горячие клавиши", "Изменить сочетания клавиш", self._page_hotkeys),
+            ("engine", "文   Перевод", "Движок перевода и ключи", self._page_engine),
+            ("display", "◐   Отображение", "Вид плашек с переводом", self._page_display),
+            ("ocr", "◎   Распознавание", "Настройки OCR", self._page_ocr),
+            ("updates", "⟳   Обновления", "Проверка и установка новых версий", self._page_updates),
+            ("about", "ⓘ   О программе", "Автозапуск, глоссарий, античит", self._page_about),
+        ]
+        self.page_index = {key: i for i, (key, *_rest) in enumerate(pages)}
+        for _key, t, tip, _builder in pages:
             it = QListWidgetItem(t)
             it.setToolTip(tip)
             self.nav.addItem(it)
@@ -380,13 +393,8 @@ class SettingsWindow(QWidget):
         sl.addWidget(ver, 0, Qt.AlignmentFlag.AlignHCenter)
 
         self.stack = QStackedWidget()
-        self.stack.addWidget(self._page_home())
-        self.stack.addWidget(self._page_hotkeys())
-        self.stack.addWidget(self._page_engine())
-        self.stack.addWidget(self._page_display())
-        self.stack.addWidget(self._page_ocr())
-        self.stack.addWidget(self._page_updates())
-        self.stack.addWidget(self._page_about())
+        for _key, _t, _tip, builder in pages:
+            self.stack.addWidget(builder())
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.nav.setCurrentRow(0)
 
@@ -514,7 +522,7 @@ class SettingsWindow(QWidget):
         head.addWidget(label("Горячие клавиши", "h2"), 1)
         edit = QPushButton("Изменить")
         edit.setToolTip("Открыть настройку сочетаний клавиш")
-        edit.clicked.connect(lambda: self.nav.setCurrentRow(1))
+        edit.clicked.connect(lambda: self.go("hotkeys"))
         head.addWidget(edit)
         kl.addLayout(head)
         grid = QGridLayout()
@@ -538,8 +546,12 @@ class SettingsWindow(QWidget):
         seg = QHBoxLayout()
         seg.setSpacing(0)
         grp = QButtonGroup(self)
-        for key, text, tip in (("overlay", "Поверх игры", "Плашки рисуются прямо над текстом игры"),
-                               ("panel", "Отдельная панель", "Список перевода в отдельном окне — удобно на втором мониторе")):
+        for key, text, tip in (
+            ("snapshot", "Безопасный", "Снимок экрана с переводом в обычном окне. Закрывается любой клавишей или кликом. "
+                                       "Ничего не рисует поверх игры — самый незаметный для античита режим"),
+            ("panel", "Панель", "Список перевода в отдельном окне — удобно на втором мониторе"),
+            ("overlay", "Поверх игры", "Прозрачные плашки прямо над игрой. Удобно, но такие окна больше похожи на то, что ищут античиты"),
+        ):
             b = QPushButton(text)
             b.setObjectName("seg")
             b.setCheckable(True)
@@ -551,7 +563,7 @@ class SettingsWindow(QWidget):
         segw = QWidget()
         segw.setLayout(seg)
         mc, ml = card()
-        ml.addWidget(row("Режим показа", "Панель на втором мониторе — самый безопасный вариант для античита.", segw))
+        ml.addWidget(row("Режим показа", "«Безопасный» рекомендуется: ничего не рисуется поверх игры.", segw))
         lay.addWidget(mc)
 
         # --- подсказки
@@ -559,9 +571,11 @@ class SettingsWindow(QWidget):
         tl.addWidget(label("Подсказки", "h2"))
         self.tip_labels: list[tuple[QLabel, str]] = []
         for text in (
-            "<b>Как убрать перевод:</b> он сам пропадает через 1–2 секунды после любого нажатия клавиши или мыши (настраивается в «Отображении»). Сразу убрать — {clear}.",
-            "<b>Плашек не видно поверх игры?</b> Включите в игре «Окно без рамки» или нажмите {toggle_mode} — перевод откроется отдельным окном.",
-            "<b>Только часть экрана:</b> {region}, затем выделите текст мышью. Esc — отмена.",
+            "<b>Как убрать перевод:</b> в безопасном режиме — любая клавиша или клик. В режиме «Поверх игры» он пропадает сам после нажатия. Всегда работает {clear}.",
+            "<b>Безопасность:</b> программа не трогает игру. Режим «Безопасный» не рисует поверх игры вообще; переводите в меню и лобби, а не в рейде.",
+            "<b>Перевод не появляется?</b> Включите в игре «Окно без рамки». {toggle_mode} — переключить на отдельную панель.",
+            "<b>Квест непонятен?</b> Откройте его в игре и нажмите {quest_guide} — карточка с целями, наградами и скриншотами мест.",
+            "<b>Только часть экрана:</b> {region}, затем выделите текст мышью. {under_cursor} — строка под курсором.",
             "<b>Окно закрыто — программа работает:</b> значок «译» в трее у часов. Выход: {quit} или правый клик по значку.",
             f"<b>Что-то не так?</b> Пишите в Discord-чат или Telegram <b style='color:#2fd69b'>@{TELEGRAM}</b>.",
             "<span style='color:#46c878'>●</span> перевод из лор-глоссария (точный) &nbsp; <span style='color:#ebb43c'>●</span> машинный — проверяйте по смыслу.",
@@ -587,7 +601,8 @@ class SettingsWindow(QWidget):
 
         for lb, text in self.tip_labels:
             lb.setText(text.format(**{k: fmt(v) for k, v in hk.items()}))
-        self.chip_mode.setText("Поверх игры" if self.cfg["display"]["mode"] == "overlay" else "Отдельная панель")
+        self.chip_mode.setText({"snapshot": "Безопасный режим", "panel": "Отдельная панель",
+                                "overlay": "Поверх игры"}.get(self.cfg["display"]["mode"], ""))
         eng = {"google": "Google", "deepl": "DeepL", "claude": "Claude"}.get(self.cfg["engine"], self.cfg["engine"])
         self.chip_engine.setText(f"Движок: {eng}")
 
@@ -602,6 +617,140 @@ class SettingsWindow(QWidget):
             self.status_sub.setText("Нажмите горячую клавишу в игре или карточку ниже — окно скроется на время снимка.")
         self.status_label.style().unpolish(self.status_label)
         self.status_label.style().polish(self.status_label)
+
+    def go(self, key: str) -> None:
+        self.nav.setCurrentRow(self.page_index[key])
+
+    # ------------------------------------------------------------- квесты
+    def _page_quests(self) -> QWidget:
+        sc, lay = page("Квесты", "Все задания отделов с переводом по лору. В игре можно просто нажать «Гид по квесту» "
+                                 "на открытом задании — карточка откроется сама.")
+        top = QHBoxLayout()
+        self.q_search = QLineEdit()
+        self.q_search.setPlaceholderText("Поиск: название по-русски или по-китайски, предмет, место…")
+        self.q_search.textChanged.connect(self._fill_quests)
+        self.q_dept = QComboBox()
+        self.q_dept.addItem("Все отделы", "")
+        for key, title in (("combat", "Боевой"), ("medical", "Медицинский"), ("tactical", "Тактический"),
+                           ("logistics", "Снабжения"), ("research", "Исследований")):
+            self.q_dept.addItem(title, key)
+        self.q_dept.currentIndexChanged.connect(self._fill_quests)
+        top.addWidget(self.q_search, 1)
+        top.addWidget(self.q_dept)
+        lay.addLayout(top)
+        self.q_list = QListWidget()
+        self.q_list.setObjectName("qlist")
+        self.q_list.setStyleSheet(
+            f"QListWidget#qlist {{ background: {CARD}; border: 1px solid {LINE}; border-radius: {px(12)}px; padding: {px(6)}px; }}"
+            f"QListWidget#qlist::item {{ padding: {px(10)}px {px(12)}px; border-radius: {px(8)}px; }}"
+            f"QListWidget#qlist::item:hover {{ background: #1a212b; }}"
+            f"QListWidget#qlist::item:selected {{ background: {ACCENT_DIM}; color: {TEXT}; }}")
+        self.q_list.setMinimumHeight(px(380))
+        self.q_list.itemActivated.connect(lambda it: self.open_quest.emit(it.data(Qt.ItemDataRole.UserRole)))
+        self.q_list.itemClicked.connect(lambda it: self.open_quest.emit(it.data(Qt.ItemDataRole.UserRole)))
+        lay.addWidget(self.q_list, 1)
+        self.q_count = label("", "muted")
+        lay.addWidget(self.q_count)
+        return sc
+
+    def set_quest_db(self, db) -> None:
+        self.quest_db = db
+        self._fill_quests()
+
+    def _fill_quests(self) -> None:
+        if self.quest_db is None:
+            return
+        from .questui import quest_list_text
+
+        found = self.quest_db.search(self.q_search.text(), self.q_dept.currentData() or "")
+        self.q_list.clear()
+        for q in found:
+            it = QListWidgetItem(quest_list_text(q))
+            it.setData(Qt.ItemDataRole.UserRole, q.id)
+            if q.images:
+                it.setToolTip(f"Есть скриншоты мест: {len(q.images)}")
+            self.q_list.addItem(it)
+        self.q_count.setText(f"Найдено: {len(found)} · данные и скриншоты: kkrb.net (Key725)")
+
+    # ------------------------------------------------------------ история
+    def _page_history(self) -> QWidget:
+        sc, lay = page("История", "Последние переводы. Если перевод неверный — нажмите «Исправить»: "
+                                  "правка сразу заработает у вас и, по желанию, уйдёт автору для всех.")
+        self.h_list = QListWidget()
+        self.h_list.setObjectName("hlist")
+        self.h_list.setStyleSheet(
+            f"QListWidget#hlist {{ background: {CARD}; border: 1px solid {LINE}; border-radius: {px(12)}px; padding: {px(6)}px; }}"
+            f"QListWidget#hlist::item {{ padding: {px(8)}px {px(12)}px; border-radius: {px(8)}px; }}"
+            f"QListWidget#hlist::item:selected {{ background: {ACCENT_DIM}; color: {TEXT}; }}")
+        self.h_list.setMinimumHeight(px(330))
+        lay.addWidget(self.h_list, 1)
+        edit_box = QHBoxLayout()
+        self.h_edit = QLineEdit()
+        self.h_edit.setPlaceholderText("Выберите строку выше, впишите правильный перевод…")
+        self.h_list.currentItemChanged.connect(self._on_history_pick)
+        edit_box.addWidget(self.h_edit, 1)
+        lay.addLayout(edit_box)
+        btns = QHBoxLayout()
+        copy_btn = QPushButton("Копировать")
+        copy_btn.setToolTip("Скопировать перевод выбранной строки")
+        copy_btn.clicked.connect(self._history_copy)
+        fix_me = QPushButton("Исправить у себя")
+        fix_me.setToolTip("Сохранить правку в вашем словаре — сработает сразу")
+        fix_me.clicked.connect(lambda: self._history_fix(False))
+        fix_all = QPushButton("Исправить и отправить автору")
+        fix_all.setObjectName("primary")
+        fix_all.setToolTip("Сохранить у себя и открыть готовое предложение на GitHub — после проверки правка дойдёт до всех")
+        fix_all.clicked.connect(lambda: self._history_fix(True))
+        clear = QPushButton("Очистить")
+        clear.clicked.connect(self.history_clear.emit)
+        btns.addWidget(copy_btn)
+        btns.addWidget(fix_me)
+        btns.addWidget(fix_all)
+        btns.addStretch(1)
+        btns.addWidget(clear)
+        lay.addLayout(btns)
+        self.h_note = label("", "muted", wrap=True)
+        lay.addWidget(self.h_note)
+        return sc
+
+    def set_history(self, history) -> None:
+        self.history = history
+        self.refresh_history()
+
+    def refresh_history(self) -> None:
+        if self.history is None:
+            return
+        cur = self.h_list.currentItem()
+        keep = cur.data(Qt.ItemDataRole.UserRole) if cur else None
+        self.h_list.clear()
+        for e in self.history.entries():
+            dot = "●" if e.lore else "○"
+            it = QListWidgetItem(f"{dot} {e.ru}\n    {e.zh}")
+            it.setData(Qt.ItemDataRole.UserRole, e.zh)
+            it.setData(Qt.ItemDataRole.UserRole + 1, e.ru)
+            it.setToolTip("Из лор-глоссария" if e.lore else "Машинный перевод")
+            self.h_list.addItem(it)
+            if e.zh == keep:
+                self.h_list.setCurrentItem(it)
+
+    def _on_history_pick(self, it, _prev=None) -> None:
+        if it is not None:
+            self.h_edit.setText(it.data(Qt.ItemDataRole.UserRole + 1))
+
+    def _history_copy(self) -> None:
+        it = self.h_list.currentItem()
+        if it is not None:
+            QApplication.clipboard().setText(it.data(Qt.ItemDataRole.UserRole + 1))
+            self.h_note.setText("Скопировано")
+
+    def _history_fix(self, send: bool) -> None:
+        it = self.h_list.currentItem()
+        new = self.h_edit.text().strip()
+        if it is None or not new:
+            self.h_note.setText("Выберите строку и впишите перевод")
+            return
+        self.history_fix.emit(it.data(Qt.ItemDataRole.UserRole), new, send)
+        self.h_note.setText("Сохранено у вас" + (" · откроется GitHub, нажмите там «Submit new issue»" if send else ""))
 
     def _page_hotkeys(self) -> QWidget:
         sc, lay = page("Горячие клавиши", "Нажмите на поле и введите новое сочетание. Нужен хотя бы один модификатор: Ctrl, Alt, Shift или Win.")
@@ -756,8 +905,9 @@ class SettingsWindow(QWidget):
         cl.addWidget(sep())
         cl.addWidget(self._slider_row("opacity", "display.opacity", "Непрозрачность плашек", "Ниже — виднее игра под переводом.", 30, 100, lambda v: f"{v} %"))
         cl.addWidget(sep())
-        cl.addWidget(self._switch_row("hide_on_input", "Убирать перевод после нажатия",
-                                      "Любая клавиша или кнопка мыши (в том числе ЛКМ в игре) скрывает перевод — без Ctrl+Alt+C."))
+        cl.addWidget(self._switch_row("hide_on_input", "Убирать перевод после нажатия (режим «Поверх игры»)",
+                                      "Любая клавиша или клик скрывает плашки. Клавиатура не отслеживается: "
+                                      "программа видит только факт ввода, как мессенджеры для статуса «отошёл»."))
         cl.addWidget(sep())
         cl.addWidget(self._slider_row("hide_delay", "display.hide_delay_sec", "Задержка скрытия",
                                       "Через сколько секунд после нажатия перевод пропадёт.", 1, 10,

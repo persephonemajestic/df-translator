@@ -89,8 +89,12 @@ class OverlayWindow(QWidget):
         self.hide()
 
     def paintEvent(self, _event) -> None:  # noqa: N802
-        d = self.cfg["display"]
         p = QPainter(self)
+        self._paint_plates(p)
+        p.end()
+
+    def _paint_plates(self, p: QPainter) -> None:
+        d = self.cfg["display"]
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         alpha = int(255 * max(0.3, min(1.0, float(d["opacity"]))))
         for it in self.placed:
@@ -116,7 +120,59 @@ class OverlayWindow(QWidget):
             p.setFont(f)
             p.setPen(QColor(232, 235, 240))
             p.drawText(r, CENTER_FLAGS, self.hint)
+
+
+class SnapshotWindow(OverlayWindow):
+    """Безопасный режим: обычное непрозрачное окно со снимком экрана и переводом поверх.
+
+    В отличие от оверлея, это не прозрачное «сквозное» окно поверх игры, а обыкновенное окно
+    приложения (как просмотр картинки). Закрывается любой клавишей или кликом — эти нажатия окно
+    получает само, поэтому не нужно ни следить за клавиатурой, ни опрашивать кнопки.
+    """
+
+    closed = Signal()
+
+    def __init__(self, cfg: dict):
+        super().__init__(cfg)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
+                            | Qt.WindowType.Tool)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, False)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.pix: QPixmap | None = None
+
+    def show_snapshot(self, screen: QRect, image: QImage, items: list[Item], hint: str = "") -> None:
+        self.pix = QPixmap.fromImage(image)
+        self.show_items(screen, items, hint)
+        self.activateWindow()
+        self.setFocus()
+
+    def clear(self) -> None:
+        was = self.isVisible()
+        super().clear()
+        self.pix = None
+        if was:
+            self.closed.emit()
+
+    def paintEvent(self, _event) -> None:  # noqa: N802
+        p = QPainter(self)
+        if self.pix is not None:
+            p.drawPixmap(0, 0, self.pix)
+        else:
+            p.fillRect(self.rect(), QColor(10, 12, 16))
+        self._paint_plates(p)
         p.end()
+
+    def keyPressEvent(self, _e) -> None:  # noqa: N802
+        self.clear()
+
+    def mousePressEvent(self, _e) -> None:  # noqa: N802
+        self.clear()
+
+    def focusOutEvent(self, e) -> None:  # noqa: N802
+        super().focusOutEvent(e)
+        QTimer.singleShot(0, self.clear)  # переключились на другое окно (Alt+Tab) — закрываемся
 
 
 class PanelWindow(QWidget):

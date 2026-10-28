@@ -335,13 +335,12 @@ def test_updater_versions_and_release_parsing():
     assert parse_release({"tag_name": "v1", "assets": []}) is None
 
 
-def test_input_watch_detects_only_new_presses():
-    from dftranslator.inputwatch import detect_new_press
+def test_input_watch_press_without_cursor_move():
+    from dftranslator.inputwatch import detect_press
 
-    assert not detect_new_press(frozenset({0x11, 0x43}), frozenset({0x11, 0x43}))   # удержание — не нажатие
-    assert not detect_new_press(frozenset({0x11, 0x43}), frozenset())               # отпустили
-    assert detect_new_press(frozenset(), frozenset({0x01}))                          # ЛКМ
-    assert detect_new_press(frozenset({0x11}), frozenset({0x11, 0x57}))              # добавилась W
+    assert detect_press(100, 150, (5, 5), (5, 5))        # ввод, курсор на месте → нажатие
+    assert not detect_press(100, 150, (5, 5), (9, 7))    # курсор двигали → не считаем
+    assert not detect_press(100, 100, (5, 5), (5, 5))    # ввода не было
 
 
 def test_screen_strings_from_real_game():
@@ -370,3 +369,66 @@ def test_updater_tag_from_redirect():
 
     assert tag_from_location("https://github.com/a/b/releases/tag/v1.0.2") == "1.0.2"
     assert tag_from_location("https://github.com/a/b/releases") is None
+
+
+def test_questdb_loads_and_matches():
+    from dftranslator.questdb import QuestDB, translate_map
+
+    db = QuestDB(DATA)
+    assert len(db.quests) == 333
+    g = Glossary(DATA, None)
+    db.set_names(g.lookup_quest_name)
+    q = db.match_name("电站搜寻")
+    assert q and q.dept == "combat" and len(q.image_urls()) == 2
+    assert q.image_urls()[0].endswith("combat_department_mission/task3_01.webp")
+    assert db.match_name("建造者：基础构違-1").key == 65  # одна ошибка OCR в длинном названии
+    assert db.match_name("电站搜导") is None  # короткие названия — только точно
+    assert db.get("research-54").images == [1, 2, 4]
+    assert "Нулевая плотина (Обычный, Секретно)" == translate_map("零号大坝（常规），零号大坝（机密）")
+    items = db.get("combat-41").items()
+    assert "Прецизионная карта памяти" in items
+    assert db.search("арбалет") == [] and db.search("Прецизионная")
+    # все названия квестов переведены
+    assert all(x.name_ru != x.name for x in db.quests), [x.name for x in db.quests if x.name_ru == x.name][:5]
+
+
+def test_questdb_objectives_feed_translator():
+    from dftranslator.questdb import QuestDB
+
+    g = Glossary(DATA, None)
+    book = QuestBook(g, None)
+    book.add_objectives(QuestDB(DATA).objectives)
+    t = Translator(g, book, {"engine": "google", "engines": {}}, None)
+    r = t.local("在零号大坝任意战区行动中,前往主变电站指定位置进行调查。")
+    assert r and "главной подстанции" in r.ru
+    r2 = t.local("在零号大坝任意战区行动中,前往主变电站指定位罝进行调查。")  # OCR перепутал иероглиф
+    assert r2 and "подстанции" in r2.ru
+
+
+def test_data_manifest_is_fresh():
+    """Если упал — запустите: python tools/build_manifest.py"""
+    from dftranslator.datasync import build_manifest
+
+    stored = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
+    assert stored == build_manifest(DATA)
+
+
+def test_datasync_uses_overlay(tmp_path):
+    from dftranslator.glossary import Glossary as G
+
+    (tmp_path / "glossary.json").write_text(json.dumps({"ui": {"开始游戏": "СТАРТ"}}, ensure_ascii=False), encoding="utf-8")
+    g = G(DATA, None, overlay_dir=tmp_path)
+    assert g.lookup("开始游戏").ru == "СТАРТ"
+
+
+def test_history_and_issue_url():
+    from dftranslator.history import History, issue_url
+
+    h = History(limit=2)
+    h.add("开始游戏", "Начать игру")
+    h.add("仓库", "Склад")
+    h.add("开始游戏", "Начать игру")
+    h.add("部门", "Отделы")
+    assert [e.zh for e in h.entries()] == ["部门", "开始游戏"]
+    url = issue_url("o/r", "仓库", "Склад", "Хранилище", "1.0.0")
+    assert url.startswith("https://github.com/o/r/issues/new?title=")

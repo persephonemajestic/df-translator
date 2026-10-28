@@ -7,7 +7,7 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
-    paths-ignore: ["README.md", "assets/banner.svg", ".gitignore"]
+    paths-ignore: ["README.md", "assets/banner.svg", ".gitignore", "data/**", "RELEASE_NOTES.md"]
   workflow_dispatch:
 
 concurrency:
@@ -52,8 +52,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt pyinstaller pytest
 
-      - name: Тесты
-        run: python -m pytest tests -q
+      - name: Тесты (логика, окна Qt, OCR, запуск программы)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests -q -rs
 
       - name: Иконка
         run: python tools/make_icon.py

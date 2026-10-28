@@ -39,8 +39,10 @@ def _load_json(path: Path) -> dict:
 
 
 class Glossary:
-    def __init__(self, data_dir: Path, user_dir: Path | None = None):
+    def __init__(self, data_dir: Path, user_dir: Path | None = None, overlay_dir: Path | None = None):
         self.data_dir = Path(data_dir)
+        # overlay_dir — свежий словарь, скачанный с GitHub без обновления программы (приоритетнее встроенного)
+        self.overlay_dir = Path(overlay_dir) if overlay_dir else None
         self.user_dir = Path(user_dir) if user_dir else None
         self.exact: dict[str, Hit] = {}
         self.protect_terms: dict[str, Hit] = {}
@@ -56,8 +58,8 @@ class Glossary:
         self.quest_names.clear()
         self.quest_names_norm.clear()
 
-        base = _load_json(self.data_dir / "glossary.json")
-        names = _load_json(self.data_dir / "quest_names.json")
+        base = _load_json(self._path("glossary.json"))
+        names = _load_json(self._path("quest_names.json"))
         user = _load_json(self.user_dir / "glossary_user.json") if self.user_dir else {}
 
         for source in (base, user):  # пользовательские правки перекрывают базовые
@@ -82,6 +84,11 @@ class Glossary:
 
         self.quest_names_norm = {norm_key(k): v for k, v in self.quest_names.items()}
         self._build_protect_regex()
+
+    def _path(self, name: str) -> Path:
+        if self.overlay_dir and (self.overlay_dir / name).exists():
+            return self.overlay_dir / name
+        return self.data_dir / name
 
     def _add(self, category: str, zh: str, ru: str) -> None:
         key = norm_key(zh)

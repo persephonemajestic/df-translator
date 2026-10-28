@@ -15,8 +15,13 @@ import re
 from pathlib import Path
 
 from .glossary import Glossary
-from .text import fmt_int, norm_key
+from .text import has_cjk, fmt_int, norm_key
 
+_WEAPON_CLASS = {
+    "突击步枪": "штурмовая винтовка", "冲锋枪": "пистолет-пулемёт", "射手步枪": "марксманская винтовка",
+    "狙击步枪": "снайперская винтовка", "霰弹枪": "дробовик", "轻机枪": "ручной пулемёт", "机枪": "пулемёт",
+    "手枪": "пистолет", "步枪": "винтовка",
+}
 _SUFFIX_RE = re.compile(r"^(?P<base>.+?)(?P<sep>[-－—]?)(?P<num>\d{1,3})$")
 _RU_SUFFIX_RE = re.compile(r"^(?P<base>.+?)(?P<sep>\s—\s|\s)(?P<num>\d{1,3})$")
 _REWARD_RE = re.compile(r"^(?P<name>.+?)\s*[x×X](?P<n>\d[\d,]*)$")
@@ -42,6 +47,12 @@ class QuestBook:
                 self.series.setdefault(zm.group("base"), (rm.group("base"), rm.group("sep")))
 
     # ------------------------------------------------------------- objectives
+    def add_objectives(self, mapping: dict[str, str]) -> None:
+        """Цели из базы квестов (ключи уже нормализованы)."""
+        for k, v in mapping.items():
+            self.objectives.setdefault(norm_key(k), v)
+        self._obj_keys = list(self.objectives)
+
     def load_objectives(self, path: Path) -> None:
         with path.open(encoding="utf-8") as f:
             raw = json.load(f)
@@ -100,11 +111,20 @@ class QuestBook:
         hit = self.g.lookup(name)
         if hit:
             return hit.ru
-        gm = _GRADE_RE.match(name.strip())
+        name = name.strip()
+        gm = _GRADE_RE.match(name)
         if gm:
             grade = self.g.lookup(gm.group("grade"))
             base = self.g.lookup(gm.group("name"))
             base_ru = base.ru if base else gm.group("name")
             if grade:
                 return f"{base_ru} ({grade.ru})"
+        pm = re.match(r"^(小改|半改|满改|裸枪)(.+)$", name)  # «半改M14»
+        if pm:
+            return self._reward_name(pm.group(2) + pm.group(1))
+        for suffix, ru in _WEAPON_CLASS.items():  # «Vector冲锋枪»
+            if name.endswith(suffix) and not has_cjk(name[: -len(suffix)]):
+                return f"{name[: -len(suffix)].strip()} ({ru})"
+        if not has_cjk(name):  # патроны, модели оружия: «5.45x39mm BT»
+            return name
         return None
