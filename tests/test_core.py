@@ -342,3 +342,24 @@ def test_input_watch_detects_only_new_presses():
     assert not detect_new_press(frozenset({0x11, 0x43}), frozenset())               # отпустили
     assert detect_new_press(frozenset(), frozenset({0x01}))                          # ЛКМ
     assert detect_new_press(frozenset({0x11}), frozenset({0x11, 0x57}))              # добавилась W
+
+
+def test_screen_strings_from_real_game():
+    from dftranslator.patterns import split_objective_head
+
+    g = Glossary(DATA, None)
+    t = Translator(g, QuestBook(g, None), {"engine": "google", "engines": {}}, None)
+    expect = {
+        "赛季任务：群星": "Сезонный квест: «Созвездие»",
+        "已完成 0/2": "Выполнено 0/2",
+        "第二阶段：星火": "Этап 2: «Искра»",
+        "2-1赛季标准支线": "2-1 · Сезонная побочная линия",
+        "爱的咏叹调-4": "Ария любви — 4",
+        "赛季剩余7天": "До конца сезона: 7 дн.",
+        "任务简报": "Брифинг",
+    }
+    for zh, ru in expect.items():
+        r = t.local(zh)
+        assert r and r.ru == ru, (zh, r)
+    head = split_objective_head("在巴克什机密/绝密行动中，前往阿萨拉集市民房区域，获取任务物品手作笨弩")
+    assert head == ("Браккеш · Секретно / Совсекретно: ", "前往阿萨拉集市民房区域，获取任务物品手作笨弩")

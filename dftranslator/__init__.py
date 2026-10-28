@@ -5,3 +5,9 @@
 """
 
 __version__ = "1.0.0"
+
+AUTHOR = "LastNova"
+COMMUNITY = "Moven"
+TELEGRAM = "lastnovafuck"
+CREDIT = f"Сделано {AUTHOR} для комьюнити {COMMUNITY}"
+SUPPORT = f"Вопросы и проблемы — в Discord-чате комьюнити или в Telegram @{TELEGRAM}"

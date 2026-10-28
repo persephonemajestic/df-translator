@@ -23,6 +23,7 @@ if /i "%1"=="debug" set WIN=--console
 pyinstaller --noconfirm --clean %WIN% %MODE% --name DFTranslator ^
   --icon assets\icon.ico ^
   --add-data "data;data" ^
+  --add-data "assets\icon.png;assets" ^
   --collect-all rapidocr_onnxruntime ^
   --exclude-module tkinter --exclude-module matplotlib ^
   run_app.py || goto :fail

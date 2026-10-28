@@ -13,10 +13,10 @@ from pathlib import Path
 os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "0")
 
 from PySide6.QtCore import QObject, QRect, QTimer, QUrl, Signal  # noqa: E402
-from PySide6.QtGui import QAction, QColor, QDesktopServices, QFont, QIcon, QPainter, QPixmap  # noqa: E402
+from PySide6.QtGui import QAction, QColor, QDesktopServices, QFont, QIcon, QLinearGradient, QPainter, QPixmap  # noqa: E402
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon  # noqa: E402
 
-from . import __version__, capture, inputwatch, updater  # noqa: E402
+from . import CREDIT, __version__, capture, inputwatch, updater  # noqa: E402
 from .blocks import group_blocks  # noqa: E402
 from .config import _merge, config_dir, load_config, save_config  # noqa: E402
 from .glossary import Glossary  # noqa: E402
@@ -48,14 +48,21 @@ class Bridge(QObject):
 
 
 def make_icon() -> QIcon:
+    """Иконка окна и трея — та же, что у exe (assets/icon.png собирается вместе с программой)."""
+    png = ROOT / "assets" / "icon.png"
+    if png.exists():
+        return QIcon(str(png))
     pm = QPixmap(64, 64)
     pm.fill(QColor(0, 0, 0, 0))
     p = QPainter(pm)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    p.setBrush(QColor(34, 120, 90))
+    grad = QLinearGradient(0, 0, 64, 64)
+    grad.setColorAt(0, QColor(47, 214, 155))
+    grad.setColorAt(1, QColor(23, 160, 112))
+    p.setBrush(grad)
     p.setPen(QColor(0, 0, 0, 0))
-    p.drawRoundedRect(2, 2, 60, 60, 14, 14)
-    p.setPen(QColor(255, 255, 255))
+    p.drawRoundedRect(3, 3, 58, 58, 15, 15)
+    p.setPen(QColor(6, 35, 26))
     font = QFont()
     font.setPixelSize(40)
     font.setBold(True)
@@ -143,7 +150,7 @@ class TranslatorApp:
     # ------------------------------------------------------------------ tray
     def _build_tray(self) -> None:
         self.tray = QSystemTrayIcon(make_icon(), self.qt)
-        self.tray.setToolTip(f"DF Translator {__version__}")
+        self.tray.setToolTip(f"DF Translator {__version__}\n{CREDIT}")
         self.tray.activated.connect(self._on_tray_activated)
         self._menu = QMenu()
         self.tray.setContextMenu(self._menu)

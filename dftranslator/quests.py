@@ -73,6 +73,8 @@ class QuestBook:
         if m and m.group("base") in self.series:
             base_ru, sep = self.series[m.group("base")]
             return f"{base_ru}{sep}{m.group('num')}"
+        if m and m.group("base") in self.g.quest_names_norm:  # «爱的咏叹调-4» при известной базе
+            return f"{self.g.quest_names_norm[m.group('base')]} — {m.group('num')}"
         # Нечёткое совпадение для шума OCR (только для названий от 3 символов).
         if len(key) >= 3:
             match = difflib.get_close_matches(key, list(self.g.quest_names_norm), n=1, cutoff=fuzzy_cutoff)

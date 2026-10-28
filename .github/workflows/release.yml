@@ -61,7 +61,7 @@ jobs:
       - name: Сборка .exe
         run: >
           pyinstaller --noconfirm --clean --windowed --onefile --name DFTranslator
-          --icon assets/icon.ico --add-data "data;data"
+          --icon assets/icon.ico --add-data "data;data" --add-data "assets/icon.png;assets"
           --collect-all rapidocr_onnxruntime
           --exclude-module tkinter --exclude-module matplotlib
           run_app.py

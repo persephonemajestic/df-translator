@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .glossary import Glossary
 from .quests import QuestBook
+from .patterns import compose, split_objective_head
 from .templates import translate_objective
 from .text import clean_text, has_cjk
 
@@ -257,7 +258,7 @@ class Translator:
         return self._engine
 
     # -- local layers
-    def local(self, text: str) -> Result | None:
+    def local(self, text: str, _depth: int = 0) -> Result | None:
         hit = self.g.lookup(text)
         if hit:
             return Result(text, hit.ru, "glossary", True)
@@ -273,6 +274,19 @@ class Translator:
         tmpl = translate_objective(text)
         if tmpl:
             return Result(text, tmpl, "template", True)
+        if _depth < 2:
+            def part(t: str) -> str | None:
+                r = self.local(t, _depth + 1)
+                return r.ru if r else None
+
+            comp = compose(text, part)
+            if comp:
+                return Result(text, comp, "glossary", True)
+            head = split_objective_head(clean_text(text))
+            if head:
+                rest = self.local(head[1], _depth + 1)
+                if rest:
+                    return Result(text, head[0] + rest.ru, "template", True)
         return None
 
     # -- main entry
@@ -280,6 +294,7 @@ class Translator:
         self.last_error = None
         results: list[Result | None] = [None] * len(texts)
         pending: dict[str, list[int]] = {}
+        prefixes: dict[int, str] = {}
         for i, raw in enumerate(texts):
             if not has_cjk(raw):
                 results[i] = Result(raw, raw, "skip", False)
@@ -289,9 +304,13 @@ class Translator:
                 results[i] = local
                 continue
             clean = clean_text(raw)
+            head = split_objective_head(clean)
+            if head:  # карта и режим — точно, остальное переводит движок
+                prefixes[i] = head[0]
+                clean = head[1]
             cached = self.cache.get(clean)
             if cached:
-                results[i] = Result(raw, cached, "cache", False)
+                results[i] = Result(raw, prefixes.get(i, "") + cached, "cache", False)
                 continue
             pending.setdefault(clean, []).append(i)
 
@@ -307,7 +326,7 @@ class Translator:
                     if translated is None:
                         results[idx] = Result(texts[idx], "", "error", False)
                     else:
-                        results[idx] = Result(texts[idx], translated[n], self.engine_name, False)
+                        results[idx] = Result(texts[idx], prefixes.get(idx, "") + translated[n], self.engine_name, False)
                 if translated is not None and translated[n]:
                     self.cache.put(clean, translated[n])
             self.cache.flush()

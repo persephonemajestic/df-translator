@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QStackedWidget, QVBoxLayout, QWidget,
 )
 
-from . import __version__, autostart
+from . import CREDIT, TELEGRAM, __version__, autostart
 from .config import DEFAULTS
 from .hotkeys import format_hotkey, qt_key_to_name, validate_bindings
 
@@ -375,7 +375,9 @@ class SettingsWindow(QWidget):
             it.setToolTip(tip)
             self.nav.addItem(it)
         sl.addWidget(self.nav, 1)
-        sl.addWidget(label(f"версия {__version__}", "version"), 0, Qt.AlignmentFlag.AlignHCenter)
+        ver = label(f"v{__version__} · by LastNova", "version")
+        ver.setToolTip(f"{CREDIT}\nВопросы: Discord-чат или Telegram @{TELEGRAM}")
+        sl.addWidget(ver, 0, Qt.AlignmentFlag.AlignHCenter)
 
         self.stack = QStackedWidget()
         self.stack.addWidget(self._page_home())
@@ -561,6 +563,7 @@ class SettingsWindow(QWidget):
             "<b>Плашек не видно поверх игры?</b> Включите в игре «Окно без рамки» или нажмите {toggle_mode} — перевод откроется отдельным окном.",
             "<b>Только часть экрана:</b> {region}, затем выделите текст мышью. Esc — отмена.",
             "<b>Окно закрыто — программа работает:</b> значок «译» в трее у часов. Выход: {quit} или правый клик по значку.",
+            f"<b>Что-то не так?</b> Пишите в Discord-чат или Telegram <b style='color:#2fd69b'>@{TELEGRAM}</b>.",
             "<span style='color:#46c878'>●</span> перевод из лор-глоссария (точный) &nbsp; <span style='color:#ebb43c'>●</span> машинный — проверяйте по смыслу.",
         ):
             lb = label("", "tip", wrap=True)
@@ -833,6 +836,16 @@ class SettingsWindow(QWidget):
 
     def _page_about(self) -> QWidget:
         sc, lay = page("О программе", "")
+        a, al = card()
+        al.addWidget(label(CREDIT, "h2"))
+        al.addWidget(label("Для китайских игроков Delta Force.", "muted"))
+        links = label(
+            f"Вопросы и проблемы: Discord-чат комьюнити или "
+            f"<a style='color:#2fd69b' href='https://t.me/{TELEGRAM}'>Telegram @{TELEGRAM}</a>", "", wrap=True)
+        links.setOpenExternalLinks(True)
+        links.setTextFormat(Qt.TextFormat.RichText)
+        al.addWidget(links)
+        lay.addWidget(a)
         c, cl = card()
         self.autostart_sw = Switch(autostart.is_enabled())
         self.autostart_sw.setEnabled(autostart.supported())
@@ -852,11 +865,10 @@ class SettingsWindow(QWidget):
         c2, c2l = card()
         c2l.addWidget(label("Про античит", "h2"))
         c2l.addWidget(label(
-            "Программа не внедряется в игру и не читает её память: только снимает экран, распознаёт текст и показывает "
-            "отдельное окно. Горячие клавиши — штатный RegisterHotKey, без хуков клавиатуры. Гарантий от ACE это не даёт; "
-            "самый осторожный вариант — режим «Отдельная панель» на втором мониторе.", "muted", wrap=True))
+            "Не внедряется в игру и не читает её память — только снимок экрана и отдельное окно. "
+            "Гарантий от ACE нет; осторожнее всего — «Отдельная панель» на втором мониторе.", "muted", wrap=True))
         lay.addWidget(c2)
-        lay.addWidget(label("Данные квестов — kkrb.net (автор Key725). Названия и термины сверены с официальными английскими.", "muted", wrap=True))
+        lay.addWidget(label("Данные квестов — kkrb.net (Key725).", "muted", wrap=True))
         lay.addStretch(1)
         return sc
 

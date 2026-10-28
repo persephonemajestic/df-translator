@@ -64,7 +64,7 @@ def main() -> None:
     except BaseException:  # noqa: BLE001
         tb = traceback.format_exc()
         print(tb, file=log)
-        _message_box(f"Программа не запустилась.\n\n{tb[-1500:]}\n\nЛог: {log_path}")
+        _message_box(f"Программа не запустилась.\n\n{tb[-1500:]}\n\nЛог: {log_path}\n\nПришлите лог в Discord-чат комьюнити или в Telegram @lastnovafuck")
         raise
 
 
