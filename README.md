@@ -53,7 +53,7 @@
 <details>
 <summary>Для разработчика</summary>
 
-Новая версия: `git tag v1.0.1 && git push origin v1.0.1` — Actions соберёт один `DFTranslator.exe` и опубликует релиз; у пользователей он подтянется сам. Текст релиза берётся из `RELEASE_NOTES.md` и показывается в программе как «Что нового».
+Каждый пуш в `main` сам выпускает новую версию (номер +1), Actions собирает один `DFTranslator.exe`, и у пользователей он подтягивается сам. Текст «Что нового» берётся из `RELEASE_NOTES.md`. Пуш без релиза: `[skip release]` в сообщении коммита.
 
 Запуск из исходников: `pip install -r requirements.txt`, затем `python run_app.py`.
 
