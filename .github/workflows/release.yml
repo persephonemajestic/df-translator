@@ -48,25 +48,32 @@ jobs:
           grep __version__ dftranslator/__init__.py
 
       - name: Зависимости
+        shell: bash
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller pytest
+          set -o pipefail
+          { python -m pip install --upgrade pip && pip install -r requirements.txt pyinstaller pytest; } 2>&1 | tee -a ci.log
 
       - name: Тесты (логика, окна Qt, OCR, запуск программы)
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest tests -q -rs
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest tests -q -rs 2>&1 | tee -a ci.log
 
       - name: Иконка
-        run: python tools/make_icon.py
+        shell: bash
+        run: python tools/make_icon.py 2>&1 | tee -a ci.log
 
       - name: Сборка .exe
-        run: >
-          pyinstaller --noconfirm --clean --windowed --onefile --name DFTranslator
-          --icon assets/icon.ico --add-data "data;data" --add-data "assets/icon.png;assets"
-          --collect-all rapidocr_onnxruntime
-          --exclude-module tkinter --exclude-module matplotlib
-          run_app.py
+        shell: bash
+        run: |
+          set -o pipefail
+          pyinstaller --noconfirm --clean --windowed --onefile --name DFTranslator \
+            --icon assets/icon.ico --add-data "data;data" --add-data "assets/icon.png;assets" \
+            --collect-all rapidocr_onnxruntime \
+            --exclude-module tkinter --exclude-module matplotlib \
+            run_app.py 2>&1 | tail -n 60 | tee -a ci.log
 
       - name: Проверка запуска
         shell: pwsh
@@ -82,13 +89,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: v${{ steps.ver.outputs.version }}
         run: |
+          set -o pipefail
           # Релиз могли уже создать вручную на сайте — тогда просто прикладываем exe.
+          {
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/DFTranslator.exe --clobber
           else
             gh release create "$TAG" dist/DFTranslator.exe --target "$GITHUB_SHA" \
               --title "DF Translator $TAG" --notes-file RELEASE_NOTES.md
           fi
+          } 2>&1 | tee -a ci.log
 
       - name: Артефакт (ручной запуск)
         if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -96,3 +106,10 @@ jobs:
         with:
           name: DFTranslator
           path: dist/DFTranslator.exe
+
+      - name: Показать ошибку (логи Actions видны только после входа — выводим суть в аннотацию)
+        if: failure()
+        shell: bash
+        run: |
+          tail -c 3500 ci.log | tr '\r' ' ' | sed 's/%/%25/g' | tr '\n' '\r' | sed 's/\r/%0A/g' > tail.txt || true
+          echo "::error title=Сборка не удалась::$(cat tail.txt)"
