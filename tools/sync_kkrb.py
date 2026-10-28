@@ -23,8 +23,16 @@ OUT = Path(__file__).resolve().parent.parent / "data" / "kkrb_quests.json"
 def fetch(s: requests.Session, dep: str) -> dict:
     for attempt in range(3):
         r = s.post(BASE + "/getMissionGuidanceData", data={"department": f"{dep}_Department_Mission"}, timeout=30)
-        r.raise_for_status()
-        j = r.json()
+        if r.status_code != 200:
+            print(dep, "HTTP", r.status_code, r.text[:300].replace("\n", " "), file=sys.stderr)
+            time.sleep(5 * (attempt + 1))
+            continue
+        try:
+            j = r.json()
+        except ValueError:
+            print(dep, "не JSON:", r.text[:300].replace("\n", " "), file=sys.stderr)
+            time.sleep(5 * (attempt + 1))
+            continue
         if j.get("code") == 1 and isinstance(j.get("data"), dict):
             return j["data"]
         print(dep, "ответ:", str(j)[:200], file=sys.stderr)
@@ -56,6 +64,9 @@ def main() -> None:
         "User-Agent": "Mozilla/5.0 (DFTranslator quest sync; github.com/persephonemajestic/df-translator)",
         "Referer": BASE + "/?viewpage=overview",
         "X-Requested-With": "XMLHttpRequest",
+        "Origin": BASE,
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "zh-CN,zh;q=0.9",
     })
     s.get(BASE + "/?viewpage=overview", timeout=30)
     result = {"titles": {}, "required": {}, "quests": []}
