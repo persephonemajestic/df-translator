@@ -1,0 +1,43 @@
+name: UI preview
+
+# Пуш в ветку ui-preview: тесты окон и снимки на разных размерах окна -> ветка ui-shots. Релиз не выпускается.
+on:
+  push:
+    branches: [ui-preview]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  shots:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Зависимости
+        run: pip install -r requirements.txt pytest
+      - name: Тесты окон
+        env:
+          QT_QPA_PLATFORM: offscreen
+        shell: bash
+        run: |
+          python -m pytest tests -q -rs -p no:faulthandler -k "not full_app and not ocr" --junitxml=junit.xml 2>&1 | tee test.log || true
+          python -c "import xml.etree.ElementTree as E;r=E.parse('junit.xml').getroot();s=r if r.tag=='testsuite' else r[0];print('tests',s.get('tests'),'failures',s.get('failures'),'errors',s.get('errors'))" | tee -a test.log
+      - name: Снимки
+        env:
+          QT_QPA_PLATFORM: offscreen
+        shell: bash
+        run: python tools/ui_shots.py shots 2>&1 | tee -a test.log || true
+      - name: Опубликовать снимки
+        shell: bash
+        run: |
+          cp test.log shots/ 2>/dev/null || true
+          cd shots
+          git init -q -b ui-shots
+          git config user.name "ci"; git config user.email "ci@users.noreply.github.com"
+          git add -A && git commit -qm "shots ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ui-shots

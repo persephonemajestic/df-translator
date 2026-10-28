@@ -1,12 +1,13 @@
 {
  "files": {
-  "glossary.json": "d8f004ed7d5d50cdfbcfcdbe2947251ae346c7ae12fcf9d52dfe7867ff734c47",
-  "quest_names.json": "fad2466bef98d805fb377bd96f43736651e2b12b0edee37fe80b268819f61ff5",
+  "glossary.json": "eff75fab6fd1be8446095f3964b6fa3f6469ba8dfcd63169ff26b02a444598c1",
+  "quest_names.json": "e7a12cd8f9e41f61fde9865133462e17b233884159e7d25f968e51176c04ed37",
   "quests/combat.json": "bd4e6e2ecfb4e127ff086427187aae1358d26740ca91803d16e582f20338ed21",
   "quests/logistics.json": "9312662e2c528cd5f9b279fa1d6df0eef75f35e0385279bd5bad7f57afc1ed8a",
   "quests/medical.json": "01820c5c26155ba999b23b6e00a6646f63b46e51678f7c949f2c69dd0090f1b2",
   "quests/research.json": "a9b1b0d3d6f9e65d555cd83512d40226c0740f318e8886becbd808cce5a6b448",
-  "quests/season.json": "93b5f34eaa12f418fa1f6583abcfcf71602f1da5ff79eff16a95c06a15ae3170",
+  "quests/season.json": "faddf62a4d86a1ac94636afb45390a5448c0d5bde4dddc75bd91749c7845ce7a",
+  "quests/season_meta.json": "91b0e25086727a382c246bc091579e891cff749ad2b93d616cf701ca9ec8121e",
   "quests/tactical.json": "16bc30d489fab28ba3d26359367e0b99e9c86057af1f4be27e49f2165af9222d"
  }
 }
