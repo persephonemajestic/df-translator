@@ -39,10 +39,11 @@ jobs:
             VERSION="${GITHUB_REF_NAME#v}"
           else
             LAST=$(gh release list --limit 50 --json tagName -q '.[].tagName' | sed 's/^v//' | sort -V | tail -1)
-            LAST=${LAST:-1.0.0}
+            if [ -z "$LAST" ]; then echo "::error::Не удалось получить список релизов"; exit 1; fi
             IFS=. read -r MA MI PA <<< "$LAST"
             VERSION="$MA.$MI.$(( ${PA:-0} + 1 ))"
           fi
+          echo "Новая версия: $VERSION" | tee -a ci.log
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           sed -i "s/^__version__ = .*/__version__ = \"$VERSION\"/" dftranslator/__init__.py
           grep __version__ dftranslator/__init__.py
@@ -93,14 +94,19 @@ jobs:
           TAG: v${{ steps.ver.outputs.version }}
         run: |
           set -o pipefail
-          # Релиз могли уже создать вручную на сайте — тогда просто прикладываем exe.
           {
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/DFTranslator.exe --clobber
-          else
-            gh release create "$TAG" dist/DFTranslator.exe --target "$GITHUB_SHA" \
-              --title "DF Translator $TAG" --notes-file RELEASE_NOTES.md
+          echo "Выпуск $TAG"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "DF Translator $TAG" \
+              --notes-file RELEASE_NOTES.md || echo "create вернул код $?"
           fi
+          ok=0
+          for i in 1 2 3; do
+            if gh release upload "$TAG" dist/DFTranslator.exe --clobber; then ok=1; break; fi
+            echo "загрузка exe, попытка $i не удалась"; sleep 20
+          done
+          gh release view "$TAG" --json assets -q '.assets[].name'
+          [ "$ok" = 1 ]
           } 2>&1 | tee -a ci.log
 
       - name: Артефакт (ручной запуск)

@@ -52,6 +52,10 @@ class Quest:
     objectives: list[tuple[str, str]]
     rewards: list[str]
     name_ru: str = ""
+    stage: int = 0          # сезон: этап 1..4
+    line: str = ""          # сезон: "main" или "1-3"
+    line_name: str = ""     # сезон: название ветки (китайское)
+    order: int = 0
 
     @property
     def id(self) -> str:
@@ -62,6 +66,14 @@ class Quest:
 
     def map_ru(self) -> str:
         return translate_map(self.map)
+
+    def group(self) -> str:
+        """Группа в списке: карта (для отделов) или ветка сезона."""
+        if self.dept == "season":
+            return f"{self.stage:02d}|{self.line}"
+        first = re.split(r"[,，]", self.map or "")[0]
+        base = re.sub(r"[（(].*$", "", first).strip()
+        return base or "局外"
 
     def items(self) -> list[str]:
         """Квестовые предметы и то, что нужно принести с собой — по переводу целей."""
@@ -125,6 +137,8 @@ class QuestDB:
                     dept=dept, key=int(q["k"]), parent=q.get("p"), name=q["n"], qtype=q.get("t", ""),
                     map=q.get("m", ""), forced=q.get("f", ""), images=images,
                     objectives=[(a, b) for a, b in q.get("o", [])], rewards=list(q.get("r", [])),
+                    stage=int(q.get("s", 0)), line=q.get("l", ""), line_name=q.get("ln", ""),
+                    order=len(self.quests),
                 )
                 self.quests.append(quest)
                 self.by_name.setdefault(norm_key(quest.name), quest)
@@ -151,8 +165,27 @@ class QuestDB:
                 return self.by_name[m[0]]
         return None
 
+    def season_line(self, code: str) -> list[Quest]:
+        """«1-3» -> квесты сезонной ветки 1-3; «1» или «01» -> основная линия этапа 1."""
+        code = code.strip()
+        m = re.fullmatch(r"0?(\d)-(\d)", code)
+        if m:
+            key = f"{int(m.group(1))}-{int(m.group(2))}"
+            return [q for q in self.quests if q.dept == "season" and q.line == key]
+        m = re.fullmatch(r"0?(\d)", code)
+        if m:
+            return [q for q in self.quests if q.dept == "season" and q.stage == int(m.group(1)) and q.line == "main"]
+        return []
+
     def search(self, query: str, dept: str = "") -> list[Quest]:
         q = query.strip().lower()
+        m = re.fullmatch(r"0?(\d)-(\d)(?:[-\s#]+(\d+))?", q)
+        if m:  # «1-3» — ветка сезона, «1-3-4» — 4-е задание ветки
+            line = self.season_line(f"{m.group(1)}-{m.group(2)}")
+            if m.group(3):
+                n = int(m.group(3))
+                return line[n - 1:n] if 0 < n <= len(line) else []
+            return line
         out = []
         for quest in self.quests:
             if dept and quest.dept != dept:

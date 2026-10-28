@@ -346,8 +346,8 @@ class SettingsWindow(QWidget):
         self.setObjectName("root")
         self.setWindowTitle("DF Translator")
         self.setWindowIcon(icon)
-        self.resize(px(940), px(660))
-        self.setMinimumSize(px(780), px(520))
+        self.resize(px(1240), px(780))
+        self.setMinimumSize(px(980), px(600))
         self.setStyleSheet(build_qss())
         self.cfg = cfg
         self.draft = copy.deepcopy(cfg)
@@ -624,54 +624,24 @@ class SettingsWindow(QWidget):
 
     # ------------------------------------------------------------- квесты
     def _page_quests(self) -> QWidget:
-        sc, lay = page("Квесты", "Все задания отделов с переводом по лору. В игре можно просто нажать «Гид по квесту» "
-                                 "на открытом задании — карточка откроется сама.")
-        top = QHBoxLayout()
-        self.q_search = QLineEdit()
-        self.q_search.setPlaceholderText("Поиск: название по-русски или по-китайски, предмет, место…")
-        self.q_search.textChanged.connect(self._fill_quests)
-        self.q_dept = QComboBox()
-        self.q_dept.addItem("Все отделы", "")
-        for key, title in (("combat", "Боевой"), ("medical", "Медицинский"), ("tactical", "Тактический"),
-                           ("logistics", "Снабжения"), ("research", "Исследований")):
-            self.q_dept.addItem(title, key)
-        self.q_dept.currentIndexChanged.connect(self._fill_quests)
-        top.addWidget(self.q_search, 1)
-        top.addWidget(self.q_dept)
-        lay.addLayout(top)
-        self.q_list = QListWidget()
-        self.q_list.setObjectName("qlist")
-        self.q_list.setStyleSheet(
-            f"QListWidget#qlist {{ background: {CARD}; border: 1px solid {LINE}; border-radius: {px(12)}px; padding: {px(6)}px; }}"
-            f"QListWidget#qlist::item {{ padding: {px(10)}px {px(12)}px; border-radius: {px(8)}px; }}"
-            f"QListWidget#qlist::item:hover {{ background: #1a212b; }}"
-            f"QListWidget#qlist::item:selected {{ background: {ACCENT_DIM}; color: {TEXT}; }}")
-        self.q_list.setMinimumHeight(px(380))
-        self.q_list.itemActivated.connect(lambda it: self.open_quest.emit(it.data(Qt.ItemDataRole.UserRole)))
-        self.q_list.itemClicked.connect(lambda it: self.open_quest.emit(it.data(Qt.ItemDataRole.UserRole)))
-        lay.addWidget(self.q_list, 1)
-        self.q_count = label("", "muted")
-        lay.addWidget(self.q_count)
-        return sc
+        w = QWidget()
+        w.setObjectName("content")
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(px(24), px(22), px(24), px(16))
+        lay.setSpacing(px(12))
+        head = QHBoxLayout()
+        head.addWidget(label("Квесты", "h1"))
+        head.addStretch(1)
+        head.addWidget(label("В игре: откройте задание и нажмите «Гид по квесту» — оно откроется здесь", "muted"))
+        lay.addLayout(head)
+        self.q_host = QVBoxLayout()
+        lay.addLayout(self.q_host, 1)
+        self.quest_browser = None
+        return w
 
-    def set_quest_db(self, db) -> None:
-        self.quest_db = db
-        self._fill_quests()
-
-    def _fill_quests(self) -> None:
-        if self.quest_db is None:
-            return
-        from .questui import quest_list_text
-
-        found = self.quest_db.search(self.q_search.text(), self.q_dept.currentData() or "")
-        self.q_list.clear()
-        for q in found:
-            it = QListWidgetItem(quest_list_text(q))
-            it.setData(Qt.ItemDataRole.UserRole, q.id)
-            if q.images:
-                it.setToolTip(f"Есть скриншоты мест: {len(q.images)}")
-            self.q_list.addItem(it)
-        self.q_count.setText(f"Найдено: {len(found)} · данные и скриншоты: kkrb.net (Key725)")
+    def install_quest_browser(self, browser) -> None:
+        self.quest_browser = browser
+        self.q_host.addWidget(browser)
 
     # ------------------------------------------------------------ история
     def _page_history(self) -> QWidget:

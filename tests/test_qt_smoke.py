@@ -44,7 +44,6 @@ def test_settings_window_all_pages(qapp, errors):
     w = SettingsWindow(cfg, QIcon())
     w.show()
     db = QuestDB(DATA)
-    w.set_quest_db(db)
     h = History()
     h.add("开始游戏", "Начать игру", "glossary", True)
     w.set_history(h)
@@ -52,7 +51,6 @@ def test_settings_window_all_pages(qapp, errors):
         w.nav.setCurrentRow(i)
         qapp.processEvents()
         w.grab()
-    w.q_search.setText("Нулевая")
     w.load_from_draft()
     w.refresh_home()
     w.set_hotkey_status(["тест"])
@@ -154,3 +152,48 @@ def test_ocr_reads_chinese():
     text = " ".join(ln.text for ln in lines)
     assert "开始游戏" in text, text
     assert "零号大坝" in text, text
+
+
+def test_quest_browser(qapp, errors, tmp_path, monkeypatch):
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QIcon
+
+    from dftranslator.glossary import Glossary
+    from dftranslator.progress import Progress
+    from dftranslator.questdb import QuestDB
+    from dftranslator.quests import QuestBook
+    from dftranslator.questui import ImageLoader, QuestBrowser
+
+    g = Glossary(DATA, None)
+    book = QuestBook(g, None)
+    db = QuestDB(DATA)
+    db.set_names(book.quest_name)
+    loader = ImageLoader(tmp_path / "img")
+    monkeypatch.setattr(loader, "request", lambda url: None)
+    progress = Progress(tmp_path / "progress.json")
+    b = QuestBrowser(QIcon(), loader, book.reward, progress)
+    b.name_lookup = book.quest_name
+    b.set_db(db)
+    b.resize(1400, 800)
+    b.show()
+    for key in list(b.rail_btns):
+        if b.rail_btns[key].isEnabled():
+            b.set_section(key)
+            qapp.processEvents()
+            b.grab()
+    b.select("season-5")
+    assert b.section == "season:2"
+    progress.set_many([q.id for q in db.season_line("1-3")], True)
+    b.set_section("season:1")
+    top = [b.tree.topLevelItem(i).text(0) for i in range(b.tree.topLevelItemCount())]
+    assert any(t.startswith("✓ 1-3") for t in top), top
+    # галочка на ветке закрывает все её задания
+    grp = next(b.tree.topLevelItem(i) for i in range(b.tree.topLevelItemCount()) if "1-1" in b.tree.topLevelItem(i).text(0))
+    grp.setCheckState(0, Qt.CheckState.Checked)
+    qapp.processEvents()
+    assert all(progress.is_done(q.id) for q in db.season_line("1-1"))
+    b.search.setText("2-1-4")
+    qapp.processEvents()
+    b.select("combat-3")
+    b.card.grab()
+    assert not errors, errors

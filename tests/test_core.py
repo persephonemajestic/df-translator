@@ -466,3 +466,25 @@ def test_block_lines_and_labels():
     assert t.local("[任务环境]：暂无相关情报").ru == "Обстановка: Сведений пока нет"
     assert t._split_label("[任务简报]：某某某某")[0] == "Брифинг: "
     assert t.local("临时演员").ru == "Статист"
+
+
+def test_progress_roundtrip(tmp_path):
+    from dftranslator.progress import Progress
+
+    p = Progress(tmp_path / "progress.json")
+    calls = []
+    p.listeners.append(lambda: calls.append(1))
+    p.set_done("combat-1", True)
+    p.set_many(["season-111", "season-112"], True)
+    p2 = Progress(tmp_path / "progress.json")
+    assert p2.is_done("combat-1") and p2.is_done("season-112") and len(calls) == 2
+
+
+def test_season_lines_and_search():
+    from dftranslator.questdb import QuestDB
+
+    db = QuestDB(DATA)
+    assert len(db.season_line("1-3")) == 5
+    assert [q.name for q in db.search("2-1-4")] == ["爱的咏叹调-4"]
+    assert db.season_line("02")[0].name == "临时演员"
+    assert db.get("combat-3").group() == "长弓溪谷" and db.get("season-1").group() == "02|main"

@@ -109,7 +109,6 @@ class TranslatorApp:
         self.quests.add_objectives(self.quest_db.objectives)
         self.translator = Translator(self.glossary, self.quests, self.cfg, user_dir / "cache.json")
         self.history = History()
-        self._quest_card = None
         self._img_loader = None
         self.ocr = OcrEngine(self.cfg["ocr"]["min_score"])
 
@@ -153,7 +152,15 @@ class TranslatorApp:
         self.settings.open_quest.connect(self.open_quest)
         self.settings.history_fix.connect(self.on_history_fix)
         self.settings.history_clear.connect(self.on_history_clear)
-        self.settings.set_quest_db(self.quest_db)
+        from .progress import Progress
+        from .questui import ImageLoader, QuestBrowser
+
+        self.progress = Progress(self.user_dir / "progress.json")
+        self._img_loader = ImageLoader(self.user_dir / "img_cache")
+        self.quest_browser = QuestBrowser(make_icon(), self._img_loader, lambda r: self.quests.reward(r), self.progress)
+        self.quest_browser.name_lookup = lambda zh: self.quests.quest_name(zh)
+        self.quest_browser.set_db(self.quest_db)
+        self.settings.install_quest_browser(self.quest_browser)
         self.settings.set_history(self.history)
         self.bridge.quest_found.connect(self.open_quest)
         self.bridge.data_updated.connect(self.on_data_updated)
@@ -589,24 +596,13 @@ class TranslatorApp:
             self.settings.refresh_history()
 
     # ------------------------------------------------- квесты и история
-    def _ensure_card(self):
-        if self._quest_card is None:
-            from .questui import ImageLoader, QuestCard
-
-            self._img_loader = ImageLoader(self.user_dir / "img_cache")
-            self._quest_card = QuestCard(
-                make_icon(), self._img_loader, self.quests.reward,
-                lambda qid: self.quest_db.get(qid),
-                lambda q: [x for x in self.quest_db.quests if x.dept == q.dept and x.parent == q.key],
-            )
-        return self._quest_card
-
     def open_quest(self, quest_id: str) -> None:
-        q = self.quest_db.get(quest_id)
-        if q is None:
+        if self.quest_db.get(quest_id) is None:
             return
         self.snapshot.clear()
-        self._ensure_card().show_quest(q)
+        self.show_settings()
+        self.settings.go("quests")
+        self.quest_browser.select(quest_id)
 
     def quest_guide(self) -> None:
         """Ищет на экране название квеста из базы и открывает его карточку."""
@@ -716,9 +712,7 @@ class TranslatorApp:
         self.quests = QuestBook(self.glossary, obj_user if obj_user.exists() else None)
         self.quests.add_objectives(self.quest_db.objectives)
         self.translator.q = self.quests
-        self.settings.set_quest_db(self.quest_db)
-        if self._quest_card is not None:
-            self._quest_card.reward_ru = self.quests.reward
+        self.quest_browser.set_db(self.quest_db)
         self.tray.showMessage("DF Translator", "Словарь и база квестов обновлены", QSystemTrayIcon.MessageIcon.Information, 3000)
 
     # ------------------------------------------------------------- lifecycle
