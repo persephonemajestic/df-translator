@@ -3,7 +3,7 @@ name: UI preview
 # Пуш в ветку ui-preview: тесты окон и снимки на разных размерах окна -> ветка ui-shots. Релиз не выпускается.
 on:
   push:
-    branches: [ui-preview]
+    branches: [ui-preview, "ui-preview-*"]
   workflow_dispatch:
 
 permissions:
@@ -18,6 +18,15 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - name: Шрифты (Golos Text, Unbounded — SIL OFL)
+        shell: bash
+        run: |
+          mkdir -p assets/fonts
+          base=https://raw.githubusercontent.com/google/fonts/main/ofl
+          curl -sSfL -o "assets/fonts/GolosText[wght].ttf" "$base/golostext/GolosText%5Bwght%5D.ttf"
+          curl -sSfL -o "assets/fonts/Unbounded[wght].ttf" "$base/unbounded/Unbounded%5Bwght%5D.ttf"
+          curl -sSfL -o "assets/fonts/OFL.txt" "$base/golostext/OFL.txt"
+          ls -la assets/fonts
       - name: Зависимости
         run: pip install -r requirements.txt pytest
       - name: Тесты окон

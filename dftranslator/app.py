@@ -20,6 +20,8 @@ from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon  # noqa: E402
 from . import CREDIT, __version__, capture, datasync, inputwatch, updater  # noqa: E402
 from .community import make_issue_urls, valid_pair  # noqa: E402
 from .history import History  # noqa: E402
+from .colors import sample_colors  # noqa: E402
+from .fonts import load_fonts  # noqa: E402
 from .questdb import QuestDB  # noqa: E402
 from .blocks import group_blocks  # noqa: E402
 from .config import _merge, config_dir, load_config, save_config  # noqa: E402
@@ -93,6 +95,7 @@ class TranslatorApp:
         self.qt.setQuitOnLastWindowClosed(False)
         self.qt.setApplicationName("DF Translator")
         detect_scale()
+        load_fonts()
         self.start_hidden = "--tray" in sys.argv
         self.just_updated = "--updated" in sys.argv
         if self.just_updated:
@@ -551,14 +554,14 @@ class TranslatorApp:
                     units.append((b.text, b.x0, b.y0, b.x1, b.y1, b.line_h))
             self.bridge.status.emit(f"Перевожу ({len(units)})…", False)
             results = self.translator.translate([u[0] for u in units])
-            items = [
-                Item(
+            items = []
+            for u, r in zip(units, results):
+                bg, fg = sample_colors(image, u[1], u[2], u[3], u[4])
+                items.append(Item(
                     zh=r.zh, ru=r.ru,
                     x0=u[1] + dx, y0=u[2] + dy, x1=u[3] + dx, y1=u[4] + dy,
-                    line_h=u[5], source=r.source, lore=r.lore,
-                )
-                for u, r in zip(units, results)
-            ]
+                    line_h=u[5], source=r.source, lore=r.lore, bg=bg, fg=fg,
+                ))
             self._last_error = self.translator.last_error
             if self.translator.last_error:
                 self.bridge.status.emit(f"Машинный перевод недоступен: {self.translator.last_error}", True)

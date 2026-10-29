@@ -7,11 +7,12 @@ from PySide6.QtCore import QRect, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QTextBrowser, QVBoxLayout, QWidget
 
-from .layout import Item, Placed, place
+from .colors import readable_fg
+from .layout import Item, Placed, place, place_inplace
 
 PAD = 5
-LORE_DOT = QColor(70, 200, 120)      # зелёная точка: перевод из лор-глоссария
-MACHINE_DOT = QColor(235, 180, 60)   # жёлтая точка: машинный перевод
+LORE_DOT = QColor(147, 180, 111)      # зелёная точка: перевод из лор-глоссария
+MACHINE_DOT = QColor(233, 162, 59)   # жёлтая точка: машинный перевод
 
 
 def _flag(*flags) -> int:
@@ -24,6 +25,7 @@ def _flag(*flags) -> int:
 
 TEXT_FLAGS = _flag(Qt.AlignmentFlag.AlignLeft, Qt.AlignmentFlag.AlignTop, Qt.TextFlag.TextWordWrap)
 CENTER_FLAGS = _flag(Qt.AlignmentFlag.AlignCenter)
+INPLACE_FLAGS = _flag(Qt.AlignmentFlag.AlignLeft, Qt.AlignmentFlag.AlignVCenter, Qt.TextFlag.TextWordWrap)
 
 
 def frame_to_qimage(frame) -> QImage:
@@ -60,8 +62,12 @@ class OverlayWindow(QWidget):
         self._timer.timeout.connect(self.clear)
 
     def _font(self, px: int) -> QFont:
-        f = QFont(self.font())
+        from .fonts import ui_family
+
+        f = QFont(ui_family())
         f.setPixelSize(px)
+        f.setWeight(QFont.Weight.Medium)
+        f.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
         return f
 
     def _measure(self, text: str, font_px: int, max_w: int) -> tuple[int, int]:
@@ -72,10 +78,15 @@ class OverlayWindow(QWidget):
         d = self.cfg["display"]
         self.hint = hint if d.get("show_hint", True) else ""
         self.setGeometry(screen)
-        self.placed = place(
-            items, screen.width(), screen.height(), self._measure,
-            min_font=int(d["min_font_px"]), max_font=int(d["max_font_px"]), pad=PAD,
-        )
+        self.inplace = bool(d.get("inplace", True))
+        if self.inplace:  # перевод ложится ровно на место китайского текста
+            self.placed = place_inplace(items, screen.width(), screen.height(), self._measure,
+                                        min_font=max(8, int(d["min_font_px"]) - 2), max_font=int(d["max_font_px"]) + 4)
+        else:
+            self.placed = place(
+                items, screen.width(), screen.height(), self._measure,
+                min_font=int(d["min_font_px"]), max_font=int(d["max_font_px"]), pad=PAD,
+            )
         self.show()
         self.raise_()
         self.update()
@@ -97,6 +108,10 @@ class OverlayWindow(QWidget):
         d = self.cfg["display"]
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         alpha = int(255 * max(0.3, min(1.0, float(d["opacity"]))))
+        if getattr(self, "inplace", False):
+            self._paint_inplace(p, d, alpha)
+            self._paint_hint(p)
+            return
         for it in self.placed:
             rect = QRect(it.x, it.y, it.w, it.h)
             p.setPen(QPen(QColor(78, 90, 108, 235), 1))
@@ -109,12 +124,33 @@ class OverlayWindow(QWidget):
                 p.setPen(Qt.PenStyle.NoPen)
                 p.setBrush(LORE_DOT if it.lore else MACHINE_DOT)
                 p.drawEllipse(rect.right() - 9, rect.top() + 3, 6, 6)
+        self._paint_hint(p)
+
+    def _paint_inplace(self, p: QPainter, d: dict, alpha: int) -> None:
+        """Плашка цвета фона закрывает оригинал, поверх — перевод цветом оригинального текста."""
+        a = max(alpha, 240)  # китайский текст должен быть закрыт полностью
+        for it in self.placed:
+            rect = QRect(it.x, it.y, it.w, it.h)
+            bg = it.bg or (16, 18, 24)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(bg[0], bg[1], bg[2], a))
+            p.drawRoundedRect(rect, 3, 3)
+            fg = readable_fg(it.bg, it.fg)
+            p.setFont(self._font(it.font_px))
+            p.setPen(QColor(*fg))
+            p.drawText(rect.adjusted(2, 0, -2, 0), INPLACE_FLAGS, it.text)
+            if d.get("show_source_dots", True) and not it.lore:
+                p.setPen(Qt.PenStyle.NoPen)  # жёлтая точка только у машинного перевода — проверяйте по смыслу
+                p.setBrush(MACHINE_DOT)
+                p.drawEllipse(rect.right() - 5, rect.top() + 1, 4, 4)
+
+    def _paint_hint(self, p: QPainter) -> None:
         if self.hint:  # подсказка, как убрать перевод
             f = self._font(14)
             fm = QFontMetrics(f)
             w, h = fm.horizontalAdvance(self.hint) + 28, fm.height() + 14
             r = QRect((self.width() - w) // 2, self.height() - h - 24, w, h)
-            p.setPen(QPen(QColor(34, 197, 139, 220), 1))
+            p.setPen(QPen(QColor(214, 174, 98, 220), 1))
             p.setBrush(QColor(16, 18, 24, 235))
             p.drawRoundedRect(r, h / 2, h / 2)
             p.setFont(f)
@@ -191,7 +227,7 @@ class PanelWindow(QWidget):
         self.browser = QTextBrowser(self)
         self.browser.setOpenLinks(False)
         self.browser.setStyleSheet(
-            "QTextBrowser { background:#12151b; color:#eceef3; border:0; padding:8px; font-size:14px; }"
+            "QTextBrowser { background:#161b21; color:#ece7dc; border:0; padding:8px; font-size:14px; }"
         )
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -209,16 +245,16 @@ class PanelWindow(QWidget):
     def show_items(self, items: list[Item], hint: str = "") -> None:
         rows = []
         if hint and self.cfg["display"].get("show_hint", True):
-            rows.append(f"<div style='color:#2fd69b;margin:0 0 14px 0'>{html.escape(hint)}</div>")
+            rows.append(f"<div style='color:#e6c27a;margin:0 0 14px 0'>{html.escape(hint)}</div>")
         for it in sorted(items, key=lambda i: (round(i.y0 / 12), i.x0)):
-            dot = "#46c878" if it.lore else "#ebb43c"
+            dot = "#93b46f" if it.lore else "#e9a23b"
             ru = html.escape(it.ru) if it.ru else "<i style='color:#c66'>нет перевода</i>"
             rows.append(
                 f"<div style='margin:0 0 12px 0'>"
-                f"<div style='color:#7d8796;font-size:11px'>{html.escape(it.zh)}</div>"
+                f"<div style='color:#97a3ae;font-size:11px'>{html.escape(it.zh)}</div>"
                 f"<div><span style='color:{dot}'>●</span> {ru}</div></div>"
             )
-        self.browser.setHtml("".join(rows) or "<i style='color:#7d8796'>Китайский текст не найден</i>")
+        self.browser.setHtml("".join(rows) or "<i style='color:#97a3ae'>Китайский текст не найден</i>")
         self.show()
         self.raise_()
 
@@ -253,7 +289,7 @@ class RegionSelector(QWidget):
         r = self._rect()
         if r:
             p.drawPixmap(r, self.pix, r)
-            p.setPen(QPen(QColor(80, 200, 255), 2))
+            p.setPen(QPen(QColor(214, 174, 98), 2))
             p.drawRect(r)
             p.setPen(QColor(255, 255, 255))
             p.drawText(r.left() + 4, max(14, r.top() - 6), f"{r.width()}×{r.height()}")

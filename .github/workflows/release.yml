@@ -48,6 +48,15 @@ jobs:
           sed -i "s/^__version__ = .*/__version__ = \"$VERSION\"/" dftranslator/__init__.py
           grep __version__ dftranslator/__init__.py
 
+      - name: Шрифты (Golos Text, Unbounded — SIL OFL)
+        shell: bash
+        run: |
+          mkdir -p assets/fonts
+          base=https://raw.githubusercontent.com/google/fonts/main/ofl
+          curl -sSfL -o "assets/fonts/GolosText[wght].ttf" "$base/golostext/GolosText%5Bwght%5D.ttf"
+          curl -sSfL -o "assets/fonts/Unbounded[wght].ttf" "$base/unbounded/Unbounded%5Bwght%5D.ttf"
+          curl -sSfL -o "assets/fonts/OFL.txt" "$base/golostext/OFL.txt"
+          ls -la assets/fonts
       - name: Зависимости
         shell: bash
         run: |
@@ -75,7 +84,7 @@ jobs:
         run: |
           set -o pipefail
           pyinstaller --noconfirm --clean --windowed --onefile --name DFTranslator \
-            --icon assets/icon.ico --add-data "data;data" --add-data "assets/icon.png;assets" \
+            --icon assets/icon.ico --add-data "data;data" --add-data "assets/icon.png;assets" --add-data "assets/fonts;assets/fonts" \
             --collect-all rapidocr_onnxruntime \
             --exclude-module tkinter --exclude-module matplotlib \
             run_app.py 2>&1 | tail -n 60 | tee -a ci.log

@@ -196,6 +196,37 @@ def test_quest_browser(qapp, errors, tmp_path, monkeypatch):
     qapp.processEvents()
     b.select("combat-3")
     b.card.grab()
+    # галочки и кнопка «Отметить выполненным» много раз подряд — без падений,
+    # и только что отмеченное не исчезает из списка сразу
+    from PySide6.QtWidgets import QPushButton
+    b.set_section("season:2")
+    qapp.processEvents()
+    for qid in ("season-203", "season-204", "season-205", "season-203"):
+        b.select(qid)
+        qapp.processEvents()
+        btn = next(x for x in b.card.findChildren(QPushButton) if "Выполн" in x.text() or "Отметить" in x.text())
+        btn.click()
+        qapp.processEvents()
+        qapp.processEvents()
+    assert progress.is_done("season-204") and not progress.is_done("season-203")
+    def visible_ids():
+        out = []
+        for i in range(b.tree.topLevelItemCount()):
+            g = b.tree.topLevelItem(i)
+            out += [g.child(j).data(0, Qt.ItemDataRole.UserRole) for j in range(g.childCount()) if not g.child(j).isHidden()]
+        return out
+    assert "season-204" in visible_ids()          # отмеченное остаётся (серым), пока не сменили раздел
+    for _ in range(3):                             # быстрые переключения галочек на ветке и задачах
+        for i in range(b.tree.topLevelItemCount()):
+            g = b.tree.topLevelItem(i)
+            g.setCheckState(0, Qt.CheckState.Checked if g.checkState(0) != Qt.CheckState.Checked else Qt.CheckState.Unchecked)
+            if g.childCount():
+                g.child(0).setCheckState(0, Qt.CheckState.Unchecked)
+        qapp.processEvents()
+        qapp.processEvents()
+    b.set_section("season:3")
+    b.set_section("season:2")
+    qapp.processEvents()
     # раскладка под ширину: три колонки -> выпадающий список -> список ИЛИ карточка
     b.search.clear()
     for w, mode in ((1300, "wide"), (800, "split"), (420, "narrow")):
@@ -278,3 +309,13 @@ def test_settings_window_small_sizes(qapp, errors, tmp_path, monkeypatch):
             _assert_fits(b.card)
     assert w.side.width() < 100   # в маленьком окне меню свёрнуто в значки
     assert not errors, errors
+
+
+def test_bundled_fonts_load(qapp):
+    from dftranslator.fonts import fonts_dir, load_fonts, ui_family
+
+    if not any(fonts_dir().glob("*.ttf")):
+        pytest.skip("шрифты скачиваются только при сборке")
+    fams = load_fonts()
+    assert "ui" in fams and "display" in fams, fams
+    assert ui_family() == fams["ui"]

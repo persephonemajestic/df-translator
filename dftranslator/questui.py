@@ -177,6 +177,7 @@ class QuestCard(QWidget):
         self.viewer = ImageViewer(loader, icon)
         self.quest: Quest | None = None
         self.show_back = False                       # кнопка «←» к списку (узкое окно справочника)
+        self.on_marked: Callable[[str], None] | None = None   # задание только что отмечено выполненным
         self.on_back: Callable[[], None] | None = None
         self._thumbs: dict[str, ClickLabel] = {}
         loader.loaded.connect(self._on_loaded)
@@ -207,7 +208,7 @@ class QuestCard(QWidget):
             back.setToolTip("К списку заданий")
             back.clicked.connect(self.on_back)
             head.addWidget(back, 0, Qt.AlignmentFlag.AlignTop)
-        head.addWidget(plain(quest.name_ru or quest.name, "h1"), 1)
+        head.addWidget(plain(quest.name_ru or quest.name, "qtitle"), 1)
         done_btn = None
         if self.progress is not None:
             done = self.progress.is_done(quest.id)
@@ -277,7 +278,7 @@ class QuestCard(QWidget):
                 th = ClickLabel("…")
                 th.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 th.setFixedSize(px(210), px(124))
-                th.setStyleSheet(f"background:#0f141b;border:1px solid #232b36;border-radius:{px(8)}px;color:#7d8796;")
+                th.setStyleSheet(f"background:#141920;border:1px solid #2e3843;border-radius:{px(8)}px;color:#97a3ae;")
                 th.setCursor(Qt.CursorShape.PointingHandCursor)
                 th.setToolTip("Открыть крупно")
                 th.clicked.connect(lambda i=i, urls=urls: self.viewer.open(urls, i))
@@ -306,6 +307,12 @@ class QuestCard(QWidget):
             lay.addWidget(flow_widget(nav))
         lay.addStretch(1)
 
+        # Старое содержимое удаляем отложенно: show_quest может вызываться из обработчика кнопки,
+        # лежащей в этом самом содержимом (мгновенное удаление роняло программу).
+        old = self.scroll.takeWidget()
+        if old is not None:
+            old.hide()
+            old.deleteLater()
         self.scroll.setWidget(inner)
         if not self.embedded:
             self.setWindowTitle(f"{quest.name_ru or quest.name} — квест")
@@ -327,8 +334,17 @@ class QuestCard(QWidget):
             self.show_quest(quest)
 
     def _toggle_done(self, quest: Quest) -> None:
-        self.progress.set_done(quest.id, not self.progress.is_done(quest.id))
-        self.show_quest(quest)
+        from PySide6.QtCore import QTimer
+
+        def apply() -> None:
+            done = not self.progress.is_done(quest.id)
+            if done and self.on_marked is not None:
+                self.on_marked(quest.id)
+            self.progress.set_done(quest.id, done)
+            if self.quest is quest:
+                self.show_quest(quest)
+
+        QTimer.singleShot(0, apply)  # не перестраиваем карточку внутри обработчика её же кнопки
 
     def _on_loaded(self, url: str, image: QImage) -> None:
         th = self._thumbs.get(url)
@@ -361,22 +377,26 @@ SPLIT_MIN = 640     # выпадающий список разделов + сп�
 
 
 def browser_qss() -> str:
-    from .settings import ACCENT, ACCENT_DIM, CARD, LINE, MUTED, TEXT
+    from .settings import ACCENT, ACCENT_DIM, CARD, CHECK_SVG, DASH_SVG, DONE, LINE, MUTED, TEXT, icon_file
 
     return f"""
 QFrame#rail {{ background: transparent; }}
-QLabel#railcap {{ color: {MUTED}; font-size: {px(11)}px; font-weight: 700; letter-spacing: 1px; padding: {px(6)}px {px(4)}px; }}
+QLabel#railcap {{ color: {MUTED}; font-size: {px(13)}px; font-weight: 600; padding: {px(8)}px {px(4)}px {px(2)}px {px(4)}px; }}
 QPushButton#railbtn {{ text-align: left; padding: {px(9)}px {px(12)}px; border-radius: {px(10)}px; background: {CARD};
   border: 1px solid {LINE}; color: {TEXT}; }}
-QPushButton#railbtn:hover {{ border-color: #3a4656; }}
+QPushButton#railbtn:hover {{ border-color: #44515f; }}
 QPushButton#railbtn:checked {{ background: {ACCENT_DIM}; border: 1px solid {ACCENT}; color: {ACCENT}; font-weight: 700; }}
-QPushButton#railbtn:disabled {{ color: #4b5563; background: #12161c; }}
+QPushButton#railbtn:disabled {{ color: #5b6672; background: #1b2128; }}
 QTreeWidget#qtree {{ background: {CARD}; border: 1px solid {LINE}; border-radius: {px(12)}px; padding: {px(4)}px; outline: 0; }}
 QTreeWidget#qtree::item {{ padding: {px(7)}px {px(4)}px; border-radius: {px(6)}px; }}
-QTreeWidget#qtree::item:hover {{ background: #1a212b; }}
+QTreeWidget#qtree::item:hover {{ background: #252e37; }}
 QTreeWidget#qtree::item:selected {{ background: {ACCENT_DIM}; color: {TEXT}; }}
-QTreeWidget#qtree::indicator {{ width: {px(16)}px; height: {px(16)}px; }}
-QLabel#unlock {{ color: #ebb43c; font-size: {px(12)}px; }}
+QTreeWidget#qtree::indicator {{ width: {px(16)}px; height: {px(16)}px; border: 1px solid #44515f; border-radius: {px(4)}px;
+  background: #141920; }}
+QTreeWidget#qtree::indicator:hover {{ border-color: {ACCENT}; }}
+QTreeWidget#qtree::indicator:checked {{ background: {DONE}; border-color: {DONE}; image: url("{icon_file('check', CHECK_SVG)}"); }}
+QTreeWidget#qtree::indicator:indeterminate {{ background: #5d6b47; border-color: #5d6b47; image: url("{icon_file('dash', DASH_SVG)}"); }}
+QLabel#unlock {{ color: #e9a23b; font-size: {px(12)}px; }}
 """
 
 
@@ -398,6 +418,9 @@ class QuestBrowser(QWidget):
         self._building = False
         self._mode = ""
         self._card_open = False   # узкий режим: показана карточка вместо списка
+        # Отмеченные сейчас задания не исчезают сразу — остаются серыми, пока не смените раздел.
+        self._keep: set[str] = set()
+        self._refresh_pending = False
         self.setStyleSheet(browser_qss())
 
         root = QHBoxLayout(self)
@@ -412,11 +435,11 @@ class QuestBrowser(QWidget):
         rl.setSpacing(px(6))
         self.rail_group = QButtonGroup(self)
         self.rail_btns: dict[str, QPushButton] = {}
-        rl.addWidget(label("ОТДЕЛЫ", "railcap"))
+        rl.addWidget(label("Отделы", "railcap"))
         for key, title in DEPT_SHORT:
             self._rail_btn(rl, key, title)
         rl.addSpacing(px(8))
-        rl.addWidget(label("СЕЗОН «СОЗВЕЗДИЕ»", "railcap"))
+        rl.addWidget(label("Сезон «Созвездие»", "railcap"))
         self.rail_season_lay = rl
         for stage in SEASON_STAGES:
             self._rail_btn(rl, f"season:{stage}", f"{stage:02d}")
@@ -439,7 +462,7 @@ class QuestBrowser(QWidget):
         self.search = QLineEdit()
         self.search.setPlaceholderText("Поиск: название, предмет, место, «1-3», «2-1-4»")
         self.search.setClearButtonEnabled(True)
-        self.search.textChanged.connect(lambda _t: self.rebuild())
+        self.search.textChanged.connect(lambda _t: (self._keep.clear(), self.rebuild()))
         mid.addWidget(self.search)
         hide_row = QHBoxLayout()
         hide_row.addWidget(label("Скрывать выполненные", "muted"), 1)
@@ -472,6 +495,7 @@ class QuestBrowser(QWidget):
         self.card = QuestCard(icon, loader, reward_ru, self._get, self._children,
                               embedded=True, progress=progress, on_open=lambda q: self.select(q.id))
         self.card.on_back = self._back_to_list
+        self.card.on_marked = self._keep.add
         self.card.setMinimumWidth(px(260))
         root.addWidget(self.card, 1)
         progress.listeners.append(self._on_progress_changed)
@@ -608,6 +632,7 @@ class QuestBrowser(QWidget):
         if section in self.rail_btns:
             self.rail_btns[section].setChecked(True)
         self._card_open = False
+        self._keep.clear()
         self.rebuild()
         self._apply_mode()
 
@@ -652,7 +677,7 @@ class QuestBrowser(QWidget):
         hide = self.hide_done.isChecked()
         self._building = True
         self.tree.clear()
-        grey = QBrush(QColor("#5c6572"))
+        grey = QBrush(QColor("#66717c"))
         total = done_total = 0
         searching = bool(self.search.text().strip())
         unlock = ""
@@ -664,6 +689,7 @@ class QuestBrowser(QWidget):
         for title, items in self._groups():
             done_ids = [q.id for q in items if self.progress.is_done(q.id)]
             closed = bool(items) and len(done_ids) == len(items)
+            just_closed = closed and any(q.id in self._keep for q in items)
             g = QTreeWidgetItem([f"{'✓ ' if closed else ''}{title}   {len(done_ids)}/{len(items)}"])
             f = QFont(g.font(0))
             f.setBold(True)
@@ -701,9 +727,12 @@ class QuestBrowser(QWidget):
                 it.setToolTip(0, f"{q.name_ru or q.name}\n{q.name}\nГалочка — задание выполнено")
                 if done:
                     it.setForeground(0, grey)
+                    fnt = QFont(it.font(0))
+                    fnt.setStrikeOut(True)
+                    it.setFont(0, fnt)
                 g.addChild(it)
-                it.setHidden(done and hide and not searching)
-            g.setExpanded(not (closed and hide) or searching)
+                it.setHidden(done and hide and not searching and q.id not in self._keep)
+            g.setExpanded(not (closed and hide and not just_closed) or searching)
         self._building = False
         self.stats.setText(f"Выполнено: {done_total} из {total}")
         self._update_rail()
@@ -752,6 +781,9 @@ class QuestBrowser(QWidget):
                 self.card.show_quest(q)
 
     def _on_clicked(self, it, _col=0) -> None:
+        if getattr(self, "_just_checked", False):   # клик был по галочке — карточку не открываем
+            self._just_checked = False
+            return
         if it is not None and it.data(0, Qt.ItemDataRole.UserRole) and not self._building:
             self._on_current(it)
             self._open_card()
@@ -759,6 +791,7 @@ class QuestBrowser(QWidget):
     def _on_item_changed(self, _it, _col) -> None:
         if self._building:
             return
+        self._just_checked = True
         if getattr(self, "_sync_pending", False):
             return
         self._sync_pending = True
@@ -781,11 +814,23 @@ class QuestBrowser(QWidget):
                     (on if checked else off).append(qid)
             itr += 1
         if on:
+            self._keep.update(on)
             self.progress.set_many(on, True)
         if off:
             self.progress.set_many(off, False)
 
     def _on_progress_changed(self) -> None:
+        # Перестраиваем после того, как Qt закончит обрабатывать текущий клик/галочку:
+        # очистка дерева прямо внутри его же сигнала роняла программу.
+        if self._refresh_pending:
+            return
+        self._refresh_pending = True
+        from PySide6.QtCore import QTimer
+
+        QTimer.singleShot(0, self._refresh_now)
+
+    def _refresh_now(self) -> None:
+        self._refresh_pending = False
         self.rebuild()
         if self.card.quest is not None:
             self.card.show_quest(self.card.quest)

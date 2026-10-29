@@ -15,10 +15,11 @@ from . import CREDIT, TELEGRAM, __version__, autostart
 from .config import DEFAULTS
 from .hotkeys import format_hotkey, qt_key_to_name, validate_bindings
 
-ACCENT = "#22c58b"
-ACCENT_DIM = "#17382f"
-BG, SIDE, CARD, LINE = "#0e1116", "#12161c", "#161b23", "#232b36"
-TEXT, MUTED, DANGER = "#e8ebf0", "#7d8796", "#e5676b"
+ACCENT = "#d6ae62"
+ACCENT_DIM = "#3b3426"
+BG, SIDE, CARD, LINE = "#161b21", "#1b2128", "#202831", "#2e3843"
+DONE = "#93b46f"   # оливковый: выполнено, всё в порядке
+TEXT, MUTED, DANGER = "#ece7dc", "#97a3ae", "#e8806f"
 
 _scale = 1.0
 
@@ -36,9 +37,32 @@ def detect_scale() -> float:
     return _scale
 
 
+def icon_file(name: str, svg: str) -> str:
+    """Маленькая SVG-иконка для QSS (галочка в чекбоксах): пишется во временную папку один раз."""
+    import tempfile
+    from pathlib import Path
+
+    path = Path(tempfile.gettempdir()) / f"dftranslator_{name}.svg"
+    try:
+        if not path.exists() or path.read_text(encoding="utf-8") != svg:
+            path.write_text(svg, encoding="utf-8")
+    except OSError:
+        return ""
+    return path.as_posix()
+
+
+CHECK_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" fill="none" '
+             'stroke="#1d2410" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>')
+DASH_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4 8h8" stroke="#1d2410" '
+            'stroke-width="2.2" stroke-linecap="round"/></svg>')
+
+
 def build_qss() -> str:
+    from .fonts import display_family, ui_family
+
+    ui, disp = ui_family(), display_family()
     return f"""
-* {{ font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif; font-size: {px(14)}px; color: {TEXT}; }}
+* {{ font-family: "{ui}", "Segoe UI", "Microsoft YaHei UI", sans-serif; font-size: {px(14)}px; color: {TEXT}; }}
 QWidget#root {{ background: {BG}; }}
 QWidget#content {{ background: {BG}; }}
 QScrollArea {{ border: 0; background: transparent; }}
@@ -47,64 +71,65 @@ QScrollBar::handle:vertical {{ background: {LINE}; border-radius: {px(5)}px; min
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
 
 QFrame#side {{ background: {SIDE}; border-right: 1px solid {LINE}; }}
-QLabel#brand {{ font-size: {px(18)}px; font-weight: 700; }}
+QLabel#brand {{ font-family: "{disp}", "{ui}"; font-size: {px(17)}px; font-weight: 600; color: {ACCENT}; }}
 QLabel#version {{ color: {MUTED}; font-size: {px(12)}px; }}
 QListWidget#nav {{ background: transparent; border: 0; outline: 0; }}
 QListWidget#nav::item {{ padding: {px(11)}px {px(14)}px; margin: {px(2)}px {px(10)}px; border-radius: {px(8)}px; color: {MUTED}; }}
-QListWidget#nav::item:hover {{ background: #1a212b; color: {TEXT}; }}
+QListWidget#nav::item:hover {{ background: #252e37; color: {TEXT}; }}
 QListWidget#nav::item:selected {{ background: {ACCENT_DIM}; color: {ACCENT}; }}
 
-QLabel#h1 {{ font-size: {px(24)}px; font-weight: 700; }}
+QLabel#h1 {{ font-family: "{disp}", "{ui}"; font-size: {px(23)}px; font-weight: 600; }}
+QLabel#qtitle {{ font-size: {px(22)}px; font-weight: 700; }}
 QLabel#h2 {{ font-size: {px(15)}px; font-weight: 600; }}
 QLabel#muted {{ color: {MUTED}; font-size: {px(13)}px; }}
 QLabel#value {{ color: {ACCENT}; font-weight: 600; min-width: {px(64)}px; }}
-QLabel#ok {{ color: {ACCENT}; }}
+QLabel#ok {{ color: {DONE}; }}
 QLabel#bad {{ color: {DANGER}; }}
 
 QFrame#card {{ background: {CARD}; border: 1px solid {LINE}; border-radius: {px(12)}px; }}
 QFrame#card QLabel {{ background: transparent; }}
 QFrame#sep {{ background: {LINE}; max-height: 1px; min-height: 1px; border: 0; }}
 
-QPushButton {{ background: #1c2330; border: 1px solid {LINE}; border-radius: {px(8)}px; padding: {px(8)}px {px(16)}px; }}
-QPushButton:hover {{ background: #232c3b; }}
-QPushButton:pressed {{ background: #1a212c; }}
-QPushButton:disabled {{ color: #4b5563; background: #151a22; }}
-QPushButton#primary {{ background: {ACCENT}; border: 0; color: #06231a; font-weight: 700; }}
-QPushButton#primary:hover {{ background: #2fd69b; }}
-QPushButton#primary:disabled {{ background: #1f3a31; color: #4f7566; }}
+QPushButton {{ background: #27303a; border: 1px solid {LINE}; border-radius: {px(8)}px; padding: {px(8)}px {px(16)}px; }}
+QPushButton:hover {{ background: #2e3945; }}
+QPushButton:pressed {{ background: #222a33; }}
+QPushButton:disabled {{ color: #5b6672; background: #1d232a; }}
+QPushButton#primary {{ background: {ACCENT}; border: 0; color: #241b0b; font-weight: 700; }}
+QPushButton#primary:hover {{ background: #e6c27a; }}
+QPushButton#primary:disabled {{ background: #2f2b22; color: #6f6650; }}
 QPushButton#danger {{ color: {DANGER}; }}
 QPushButton#action {{ text-align: left; font-weight: 600; padding: {px(16)}px {px(18)}px; border-radius: {px(12)}px; background: {CARD}; }}
-QPushButton#action:hover {{ border-color: {ACCENT}; background: #19212b; }}
+QPushButton#action:hover {{ border-color: {ACCENT}; background: #25303a; }}
 QPushButton#engine {{ text-align: left; padding: {px(14)}px {px(16)}px; border-radius: {px(12)}px; background: {CARD}; }}
-QPushButton#engine:hover {{ border-color: #3a4656; }}
+QPushButton#engine:hover {{ border-color: #44515f; }}
 QPushButton#engine:checked {{ border: 1px solid {ACCENT}; background: {ACCENT_DIM}; }}
 QPushButton#seg {{ border-radius: 0; padding: {px(9)}px {px(12)}px; min-width: {px(78)}px; background: {CARD}; }}
-QPushButton#seg:checked {{ background: {ACCENT}; color: #06231a; font-weight: 700; border-color: {ACCENT}; }}
-QPushButton#hotkey {{ font-family: Consolas, "Cascadia Mono", monospace; font-weight: 600; min-width: {px(170)}px; padding: {px(8)}px {px(14)}px; background: #0f141b; }}
-QPushButton#hotkey:hover {{ border-color: #3a4656; }}
+QPushButton#seg:checked {{ background: {ACCENT}; color: #241b0b; font-weight: 700; border-color: {ACCENT}; }}
+QPushButton#hotkey {{ font-family: Consolas, "Cascadia Mono", monospace; font-weight: 600; min-width: {px(170)}px; padding: {px(8)}px {px(14)}px; background: #141920; }}
+QPushButton#hotkey:hover {{ border-color: #44515f; }}
 QPushButton#hotkey[capturing="true"] {{ border: 1px solid {ACCENT}; color: {ACCENT}; background: {ACCENT_DIM}; }}
 QPushButton#hotkey[bad="true"] {{ border: 1px solid {DANGER}; color: {DANGER}; }}
 
-QLineEdit {{ background: #0f141b; border: 1px solid {LINE}; border-radius: {px(8)}px; padding: {px(9)}px {px(12)}px; selection-background-color: {ACCENT}; }}
+QLineEdit {{ background: #141920; border: 1px solid {LINE}; border-radius: {px(8)}px; padding: {px(9)}px {px(12)}px; selection-background-color: {ACCENT}; }}
 QLineEdit:focus {{ border-color: {ACCENT}; }}
-QComboBox {{ background: #0f141b; border: 1px solid {LINE}; border-radius: {px(8)}px; padding: {px(8)}px {px(12)}px; min-width: {px(150)}px; }}
-QComboBox:hover {{ border-color: #3a4656; }}
+QComboBox {{ background: #141920; border: 1px solid {LINE}; border-radius: {px(8)}px; padding: {px(8)}px {px(12)}px; min-width: {px(150)}px; }}
+QComboBox:hover {{ border-color: #44515f; }}
 QComboBox::drop-down {{ border: 0; width: {px(26)}px; }}
 QComboBox QAbstractItemView {{ background: {CARD}; border: 1px solid {LINE}; selection-background-color: {ACCENT_DIM}; selection-color: {ACCENT}; outline: 0; }}
 
-QToolTip {{ background: #1c2330; color: {TEXT}; border: 1px solid #3a4656; padding: {px(6)}px {px(8)}px; border-radius: {px(6)}px; }}
+QToolTip {{ background: #27303a; color: {TEXT}; border: 1px solid #44515f; padding: {px(6)}px {px(8)}px; border-radius: {px(6)}px; }}
 QLabel#key {{ font-family: Consolas, "Cascadia Mono", monospace; font-size: {px(12)}px; font-weight: 700; color: {TEXT};
-  background: #0f141b; border: 1px solid #2b3442; border-bottom: {px(2)}px solid #2b3442; border-radius: {px(6)}px; padding: {px(2)}px {px(8)}px; }}
+  background: #141920; border: 1px solid #3a4552; border-bottom: {px(2)}px solid #3a4552; border-radius: {px(6)}px; padding: {px(2)}px {px(8)}px; }}
 QLabel#plus {{ color: {MUTED}; font-size: {px(12)}px; }}
 QLabel#glyph {{ background: {ACCENT_DIM}; color: {ACCENT}; border-radius: {px(10)}px; font-size: {px(20)}px; font-weight: 700; min-width: {px(40)}px; max-width: {px(40)}px; min-height: {px(40)}px; max-height: {px(40)}px; }}
-QLabel#glyphDanger {{ background: #3a1d20; color: {DANGER}; border-radius: {px(10)}px; font-size: {px(20)}px; font-weight: 700; min-width: {px(40)}px; max-width: {px(40)}px; min-height: {px(40)}px; max-height: {px(40)}px; }}
+QLabel#glyphDanger {{ background: #43282a; color: {DANGER}; border-radius: {px(10)}px; font-size: {px(20)}px; font-weight: 700; min-width: {px(40)}px; max-width: {px(40)}px; min-height: {px(40)}px; max-height: {px(40)}px; }}
 QFrame#actionCard {{ background: {CARD}; border: 1px solid {LINE}; border-radius: {px(14)}px; }}
-QFrame#actionCard:hover {{ border-color: {ACCENT}; background: #19212b; }}
+QFrame#actionCard:hover {{ border-color: {ACCENT}; background: #25303a; }}
 QFrame#actionCard QLabel {{ background: transparent; }}
-QLabel#chip {{ background: #1c2330; border: 1px solid {LINE}; border-radius: {px(11)}px; padding: {px(3)}px {px(10)}px; color: {MUTED}; font-size: {px(12)}px; }}
-QLabel#statusOk {{ color: {ACCENT}; font-weight: 600; font-size: {px(15)}px; }}
-QLabel#statusBad {{ color: #ebb43c; font-weight: 600; font-size: {px(15)}px; }}
-QLabel#tip {{ color: #b6bfcc; font-size: {px(13)}px; }}
+QLabel#chip {{ background: #27303a; border: 1px solid {LINE}; border-radius: {px(11)}px; padding: {px(3)}px {px(10)}px; color: {MUTED}; font-size: {px(12)}px; }}
+QLabel#statusOk {{ color: {DONE}; font-weight: 600; font-size: {px(15)}px; }}
+QLabel#statusBad {{ color: #e9a23b; font-weight: 600; font-size: {px(15)}px; }}
+QLabel#tip {{ color: #c3c9cf; font-size: {px(13)}px; }}
 QSlider::groove:horizontal {{ height: {px(6)}px; background: {LINE}; border-radius: {px(3)}px; }}
 QSlider::sub-page:horizontal {{ background: {ACCENT}; border-radius: {px(3)}px; }}
 QSlider::handle:horizontal {{ background: #fff; width: {px(16)}px; height: {px(16)}px; margin: -{px(5)}px 0; border-radius: {px(8)}px; }}
@@ -263,11 +288,11 @@ class Switch(QAbstractButton):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(ACCENT if self.isChecked() else "#2b3442"))
+        p.setBrush(QColor(ACCENT if self.isChecked() else "#3a4552"))
         p.drawRoundedRect(self.rect(), self.height() / 2, self.height() / 2)
         d = self.height() - px(6)
         x = self.width() - d - px(3) if self.isChecked() else px(3)
-        p.setBrush(QColor("#ffffff" if self.isEnabled() else "#8a93a0"))
+        p.setBrush(QColor("#ffffff" if self.isEnabled() else "#8f99a3"))
         p.drawEllipse(QRect(x, px(3), d, d))
         p.end()
 
@@ -778,8 +803,8 @@ class SettingsWindow(QWidget):
             "<b>Квест непонятен?</b> Откройте его в игре и нажмите {quest_guide} — карточка с целями, наградами и скриншотами мест.",
             "<b>Только часть экрана:</b> {region}, затем выделите текст мышью. {under_cursor} — строка под курсором.",
             "<b>Окно закрыто — программа работает:</b> значок «译» в трее у часов. Выход: {quit} или правый клик по значку.",
-            f"<b>Что-то не так?</b> Пишите в Discord-чат или Telegram <b style='color:#2fd69b'>@{TELEGRAM}</b>.",
-            "<span style='color:#46c878'>●</span> перевод из лор-глоссария (точный) &nbsp; <span style='color:#ebb43c'>●</span> машинный — проверяйте по смыслу.",
+            f"<b>Что-то не так?</b> Пишите в Discord-чат или Telegram <b style='color:#e6c27a'>@{TELEGRAM}</b>.",
+            "<span style='color:#93b46f'>●</span> перевод из лор-глоссария (точный) &nbsp; <span style='color:#e9a23b'>●</span> машинный — проверяйте по смыслу.",
         ):
             lb = label("", "tip", wrap=True)
             lb.setTextFormat(Qt.TextFormat.RichText)
@@ -798,7 +823,7 @@ class SettingsWindow(QWidget):
             kcp.set_spec(hk[name])
 
         def fmt(spec: str) -> str:
-            return f"<b style='color:#2fd69b'>{spec}</b>"
+            return f"<b style='color:#e6c27a'>{spec}</b>"
 
         for lb, text in self.tip_labels:
             lb.setText(text.format(**{k: fmt(v) for k, v in hk.items()}))
@@ -1158,7 +1183,7 @@ class SettingsWindow(QWidget):
         al.addWidget(label("Для китайских игроков Delta Force.", "muted"))
         links = label(
             f"Вопросы и проблемы: Discord-чат комьюнити или "
-            f"<a style='color:#2fd69b' href='https://t.me/{TELEGRAM}'>Telegram @{TELEGRAM}</a>", "", wrap=True)
+            f"<a style='color:#e6c27a' href='https://t.me/{TELEGRAM}'>Telegram @{TELEGRAM}</a>", "", wrap=True)
         links.setOpenExternalLinks(True)
         links.setTextFormat(Qt.TextFormat.RichText)
         al.addWidget(links)
@@ -1225,7 +1250,7 @@ class SettingsWindow(QWidget):
             dwm = ctypes.windll.dwmapi  # type: ignore[attr-defined]
             one = ctypes.c_int(1)
             dwm.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(one), 4)  # DWMWA_USE_IMMERSIVE_DARK_MODE
-            cap = ctypes.c_int(0x0016110E)  # цвет заголовка #0e1116 (BGR), Windows 11
+            cap = ctypes.c_int(0x0016110E)  # цвет заголовка #161b21 (BGR), Windows 11
             dwm.DwmSetWindowAttribute(hwnd, 35, ctypes.byref(cap), 4)
             txt = ctypes.c_int(0x00F0EBE8)
             dwm.DwmSetWindowAttribute(hwnd, 36, ctypes.byref(txt), 4)

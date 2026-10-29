@@ -19,6 +19,8 @@ class Item:
     line_h: float
     source: str = ""
     lore: bool = False
+    bg: tuple[int, int, int] | None = None   # цвет фона под оригинальным текстом (для замены «на месте»)
+    fg: tuple[int, int, int] | None = None   # цвет текста оригинала
 
     @property
     def w(self) -> float:
@@ -40,6 +42,8 @@ class Placed:
     zh: str
     source: str
     lore: bool
+    bg: tuple[int, int, int] | None = None
+    fg: tuple[int, int, int] | None = None
 
     @property
     def bottom(self) -> int:
@@ -94,3 +98,73 @@ def place(
 
         placed.append(Placed(x, y, width, height, font, it.ru, it.zh, it.source, it.lore))
     return placed
+
+
+def _hits(r: tuple[int, int, int, int], o: tuple[int, int, int, int]) -> bool:
+    return r[0] < o[0] + o[2] and r[0] + r[2] > o[0] and r[1] < o[1] + o[3] and r[1] + r[3] > o[1]
+
+
+def place_inplace(
+    items: list[Item],
+    screen_w: int,
+    screen_h: int,
+    measure: Measure,
+    min_font: int = 9,
+    max_font: int = 26,
+    pad: int = 2,
+) -> list[Placed]:
+    """Перевод «на месте»: плашка закрывает ровно китайский текст и стоит там же.
+
+    Русский текст обычно длиннее китайского, поэтому:
+      1) подбираем шрифт под высоту строки оригинала и уменьшаем, пока текст не влезет;
+      2) если не влез даже мелким шрифтом — расширяем плашку вправо, в свободное место
+         (до соседнего текста или края экрана), потом вниз — тоже до соседа;
+      3) соседние надписи при этом не перекрываются, если только места нет совсем.
+    """
+    src = [it for it in items if it.ru.strip()]
+    rects = [(int(it.x0) - pad, int(it.y0) - pad, int(it.w) + 2 * pad, int(it.h) + 2 * pad) for it in src]
+    out: list[Placed] = []
+    for i, it in enumerate(src):
+        x, y, w, h = rects[i]
+        x, y = max(0, x), max(0, y)
+        others = [r for j, r in enumerate(rects) if j != i]
+        font = int(max(min_font, min(max_font, round(it.line_h * 0.8))))
+        inner = lambda ww: max(10, ww - 2 * pad)  # noqa: E731
+
+        def fits(ww: int, hh: int, f: int) -> bool:
+            tw, th = measure(it.ru, f, inner(ww))
+            return th <= hh - 2 * pad + max(1, f // 5)
+
+        # 1) уменьшаем шрифт, но не ниже 70% от размера оригинала (иначе нечитаемо — лучше расширить)
+        floor = max(min_font, int(font * 0.7))
+        f = font
+        while f > floor and not fits(w, h, f):
+            f -= 1
+        if not fits(w, h, f):
+            # 2) вправо до соседа на той же высоте или края экрана
+            right = screen_w
+            for o in others:
+                if o[1] < y + h and o[1] + o[3] > y and o[0] >= x + w - 2:
+                    right = min(right, o[0] - 2)
+            one_line_w = measure(it.ru, f, 100000)[0] + 2 * pad + 2
+            w = max(w, min(right - x, one_line_w))
+            if not fits(w, h, f):
+                # 3) вниз до соседа ниже
+                _, th = measure(it.ru, f, inner(w))
+                need = th + 2 * pad
+                bottom = screen_h
+                for o in others:
+                    if o[0] < x + w and o[0] + o[2] > x and o[1] >= y + h - 2:
+                        bottom = min(bottom, o[1] - 2)
+                h = max(h, min(need, bottom - y))
+                # 4) всё ещё не влезло — уменьшаем шрифт до минимума
+                while f > min_font and not fits(w, h, f):
+                    f -= 1
+                if not fits(w, h, f):  # места нет совсем — текст важнее соседей
+                    _, th = measure(it.ru, f, inner(w))
+                    h = th + 2 * pad
+        w = min(w, screen_w - x)
+        if y + h > screen_h:
+            y = max(0, screen_h - h)
+        out.append(Placed(x, y, int(w), int(h), f, it.ru, it.zh, it.source, it.lore, it.bg, it.fg))
+    return out

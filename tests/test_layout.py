@@ -47,3 +47,26 @@ def test_long_text_shrinks_font_or_widens():
 
 def test_empty_translation_skipped():
     assert place([item(0, 0, 10, 10, "  ")], 800, 600, fake_measure) == []
+
+
+from dftranslator.layout import place_inplace  # noqa: E402
+
+
+def test_inplace_covers_original_position():
+    p = place_inplace([item(100, 100, 220, 124, "Начать")], 1920, 1080, fake_measure)[0]
+    assert abs(p.x - 98) <= 2 and abs(p.y - 98) <= 2
+    assert p.w >= 120 and p.h >= 24
+
+
+def test_inplace_long_text_grows_right_not_over_neighbour():
+    a = item(100, 100, 160, 120, "Очень длинный перевод короткой китайской подписи")
+    b = item(400, 100, 460, 120, "Сосед")
+    pa, pb = place_inplace([a, b], 1920, 1080, fake_measure)
+    assert pa.x + pa.w <= pb.x + 2          # не залезли на соседа справа
+    assert pa.y <= 100 and pb.y <= 100       # обе остались на своих строках
+
+
+def test_inplace_grows_down_when_no_room_right():
+    a = item(1800, 100, 1900, 120, "Длинный перевод у правого края экрана, который не влезает")
+    p = place_inplace([a], 1920, 1080, fake_measure, min_font=9)[0]
+    assert p.x + p.w <= 1920 and p.h > 24

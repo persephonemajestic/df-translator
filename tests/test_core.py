@@ -589,3 +589,18 @@ def test_kkrb_items_and_composed_names():
     assert t.local("阿萨拉牌-黑桃A").ru == "Карты Асары: туз пики"
     assert t.local("[安全总监]德穆兰").ru.endswith("Демулен")
     assert t.local("爱的咏叹调-4").ru == "Ария любви — 4"
+
+
+def test_sample_colors_finds_background_and_text():
+    import numpy as np
+
+    from dftranslator.colors import readable_fg, sample_colors
+
+    img = np.zeros((60, 200, 3), dtype=np.uint8)
+    img[:, :] = (40, 30, 20)                 # фон (BGR)
+    img[20:40, 50:150] = (40, 30, 20)
+    img[25:35, 60:140:3] = (230, 230, 230)   # «буквы»
+    bg, fg = sample_colors(img, 50, 20, 150, 40)
+    assert bg == (20, 30, 40) and fg is not None and fg[0] > 200
+    assert readable_fg(bg, fg) == fg
+    assert readable_fg((240, 240, 240), (230, 230, 230)) == (20, 22, 26)
