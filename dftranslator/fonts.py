@@ -29,6 +29,12 @@ def load_fonts() -> dict[str, str]:
             if fams:
                 _FAMILIES[key] = fams[0]
                 break
+    # Иероглифов и значков в этих шрифтах нет — явно говорим Qt, чем их подменять.
+    from PySide6.QtGui import QFont
+
+    for fam in _FAMILIES.values():
+        QFont.insertSubstitutions(fam, ["Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", "Segoe UI Symbol",
+                                        "Segoe UI Emoji", "SimSun"])
     return dict(_FAMILIES)
 
 
