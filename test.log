@@ -1,0 +1,105 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.2.0, pluggy-1.7.0 -- C:\hostedtoolcache\windows\Python\3.12.10\x64\python.exe
+cachedir: .pytest_cache
+rootdir: D:\a\df-translator\df-translator
+plugins: platformdirs-4.13.5
+collecting ... collected 78 items
+
+tests/test_core.py::test_clean_text_removes_cjk_spaces_keeps_latin PASSED [  1%]
+tests/test_core.py::test_norm_key_fullwidth_and_punct PASSED             [  2%]
+tests/test_core.py::test_fmt_int PASSED                                  [  3%]
+tests/test_core.py::test_glossary_exact_and_ui_priority PASSED           [  5%]
+tests/test_core.py::test_glossary_json_has_no_duplicate_keys_in_a_section PASSED [  6%]
+tests/test_core.py::test_user_glossary_overrides PASSED                  [  7%]
+tests/test_core.py::test_protect_and_restore_roundtrip PASSED            [  8%]
+tests/test_core.py::test_restore_tolerates_spacing_and_case PASSED       [ 10%]
+tests/test_core.py::test_find_terms PASSED                               [ 11%]
+tests/test_core.py::test_quest_names[\u9996\u6218-\u041f\u0435\u0440\u0432\u044b\u0439 \u0431\u043e\u0439] PASSED [ 12%]
+tests/test_core.py::test_quest_names[\u5c18\u5f52\u5c18,\u571f\u5f52\u571f-\u041f\u0440\u0430\u0445 \u043a \u043f\u0440\u0430\u0445\u0443] PASSED [ 14%]
+tests/test_core.py::test_quest_names[\u5c18\u5f52\u5c18\uff0c\u571f\u5f52\u571f-\u041f\u0440\u0430\u0445 \u043a \u043f\u0440\u0430\u0445\u0443] PASSED [ 15%]
+tests/test_core.py::test_quest_names[\u5efa\u9020\u8005\uff1a\u57fa\u7840\u6784\u5efa-1-\u0421\u0442\u0440\u043e\u0438\u0442\u0435\u043b\u044c: \u0431\u0430\u0437\u043e\u0432\u0430\u044f \u043f\u043e\u0441\u0442\u0440\u043e\u0439\u043a\u0430 \u2014 1] PASSED [ 16%]
+tests/test_core.py::test_quest_names[\u963f\u8428\u62c9\u70ed\u7ebf-\u67aa\u53203-\u0413\u043e\u0440\u044f\u0447\u0430\u044f \u043b\u0438\u043d\u0438\u044f \u0410\u0441\u0430\u0440\u044b \u2014 \u043e\u0440\u0443\u0436\u0435\u0439\u043d\u0438\u043a 3] PASSED [ 17%]
+tests/test_core.py::test_quest_names[\u5927\u6536\u85cf\u5bb6\uff0c\u5165\u4f1a\uff01-\u0412\u0435\u043b\u0438\u043a\u0438\u0439 \u043a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u043e\u043d\u0435\u0440: \u0432\u0441\u0442\u0443\u043f\u043b\u0435\u043d\u0438\u0435!] PASSED [ 19%]
+tests/test_core.py::test_quest_name_unknown_series_suffix PASSED         [ 20%]
+tests/test_core.py::test_quest_name_series_without_number PASSED         [ 21%]
+tests/test_core.py::test_quest_name_ocr_noise_fuzzy PASSED               [ 23%]
+tests/test_core.py::test_rewards PASSED                                  [ 24%]
+tests/test_core.py::test_objective_db_exact_and_fuzzy PASSED             [ 25%]
+tests/test_core.py::test_templates[\u5728\u96f6\u53f7\u5927\u575d\u4efb\u610f\u6218\u533a\u884c\u52a8\u4e2d,\u51fb\u8d255\u540d\u654c\u65b9\u58eb\u5175\u3002-\u041d\u0443\u043b\u0435\u0432\u0430\u044f \u043f\u043b\u043e\u0442\u0438\u043d\u0430, \u043b\u044e\u0431\u0430\u044f \u043e\u043f\u0435\u0440\u0430\u0446\u0438\u044f: \u043f\u043e\u0431\u0435\u0434\u0438\u0442\u044c \u0432\u0440\u0430\u0436\u0435\u0441\u043a\u0438\u0445 \u0441\u043e\u043b\u0434\u0430\u0442 \u2014 5.] PASSED [ 26%]
+tests/test_core.py::test_templates[\u5728\u5df4\u514b\u4ec0\u4efb\u610f\u6218\u533a\u884c\u52a8\u4e2d,\u51fb\u8d252\u540d\u963f\u8428\u62c9\u76fe\u5175\u3002 -\u0411\u0440\u0430\u043a\u043a\u0435\u0448, \u043b\u044e\u0431\u0430\u044f \u043e\u043f\u0435\u0440\u0430\u0446\u0438\u044f: \u043f\u043e\u0431\u0435\u0434\u0438\u0442\u044c \u0449\u0438\u0442\u043e\u0432\u0438\u043a\u043e\u0432 \u0410\u0441\u0430\u0440\u044b \u2014 2.] PASSED [ 28%]
+tests/test_core.py::test_templates[\u5728\u96f6\u53f7\u5927\u575d\u6218\u533a\u884c\u52a8\u4e2d,\u51fb\u8d251\u540d\u963f\u8428\u62c9\u76fe\u5175\u3002-\u041d\u0443\u043b\u0435\u0432\u0430\u044f \u043f\u043b\u043e\u0442\u0438\u043d\u0430, \u043b\u044e\u0431\u0430\u044f \u043e\u043f\u0435\u0440\u0430\u0446\u0438\u044f: \u043f\u043e\u0431\u0435\u0434\u0438\u0442\u044c \u0449\u0438\u0442\u043e\u0432\u0438\u043a\u043e\u0432 \u0410\u0441\u0430\u0440\u044b \u2014 1.] PASSED [ 29%]
+tests/test_core.py::test_templates[\u5728\u822a\u5929\u57fa\u5730\u4efb\u610f\u6218\u533a\u884c\u52a8\u4e2d,\u51fb\u8d253\u540d\u654c\u65b9\u7279\u6218\u5e72\u5458\u3002-\u041a\u043e\u0441\u043c\u0438\u0447\u0435\u0441\u043a\u0430\u044f \u0431\u0430\u0437\u0430, \u043b\u044e\u0431\u0430\u044f \u043e\u043f\u0435\u0440\u0430\u0446\u0438\u044f: \u043f\u043e\u0431\u0435\u0434\u0438\u0442\u044c \u0432\u0440\u0430\u0436\u0435\u0441\u043a\u0438\u0445 \u043e\u043f\u0435\u0440\u0430\u0442\u0438\u0432\u043d\u0438\u043a\u043e\u0432 \u2014 3.] PASSED [ 30%]
+tests/test_core.py::test_templates[\u4ece\u96f6\u53f7\u5927\u575d\u4efb\u610f\u6218\u533a\u884c\u52a8\u4e2d\u6210\u529f\u64a4\u79bb1\u6b21\u3002-\u041d\u0443\u043b\u0435\u0432\u0430\u044f \u043f\u043b\u043e\u0442\u0438\u043d\u0430, \u043b\u044e\u0431\u0430\u044f \u043e\u043f\u0435\u0440\u0430\u0446\u0438\u044f: \u0443\u0441\u043f\u0435\u0448\u043d\u043e \u044d\u0432\u0430\u043a\u0443\u0438\u0440\u043e\u0432\u0430\u0442\u044c\u0441\u044f \u2014 1 \u0440\u0430\u0437.] PASSED [ 32%]
+tests/test_core.py::test_templates[\u4ece\u5df4\u514b\u4ec0\u673a\u5bc6\u884c\u52a8\u4e2d\u6210\u529f\u64a4\u79bb1\u6b21\u3002-\u0411\u0440\u0430\u043a\u043a\u0435\u0448, \u0441\u0435\u043a\u0440\u0435\u0442\u043d\u0430\u044f \u043e\u043f\u0435\u0440\u0430\u0446\u0438\u044f: \u0443\u0441\u043f\u0435\u0448\u043d\u043e \u044d\u0432\u0430\u043a\u0443\u0438\u0440\u043e\u0432\u0430\u0442\u044c\u0441\u044f \u2014 1 \u0440\u0430\u0437.] PASSED [ 33%]
+tests/test_core.py::test_templates[\u5728\u96f6\u53f7\u5927\u575d\u4efb\u610f\u6218\u533a\u884c\u52a8\u4e2d,\u6210\u529f\u64a4\u79bb\u65f6\u5355\u5c40\u6536\u76ca\u8fbe\u523030000\u54c8\u592b\u5e01,\u5b8c\u62101\u6b21\u3002-expected6] PASSED [ 34%]
+tests/test_core.py::test_templates[\u5728\u957f\u5f13\u6eaa\u8c37\u4efb\u610f\u6218\u533a\u884c\u52a8\u4e2d,\u6210\u529f\u64a4\u79bb\u65f6\u5f53\u5355\u5c40\u6536\u76ca\u8fbe\u5230150000\u54c8\u592b\u5e01,\u5b8c\u62102\u6b21\u3002-expected7] PASSED [ 35%]
+tests/test_core.py::test_templates_miss PASSED                           [ 37%]
+tests/test_core.py::test_group_blocks_merges_wrapped_paragraph PASSED    [ 38%]
+tests/test_core.py::test_group_blocks_keeps_menu_items_separate PASSED   [ 39%]
+tests/test_core.py::test_group_blocks_ignores_non_cjk PASSED             [ 41%]
+tests/test_core.py::test_parse_hotkey PASSED                             [ 42%]
+tests/test_core.py::test_google_parse PASSED                             [ 43%]
+tests/test_core.py::test_claude_parse_array PASSED                       [ 44%]
+tests/test_core.py::test_pipeline_layers_and_engine PASSED               [ 46%]
+tests/test_core.py::test_pipeline_cache_and_dedup PASSED                 [ 47%]
+tests/test_core.py::test_pipeline_protects_glossary_terms PASSED         [ 48%]
+tests/test_core.py::test_pipeline_engine_error PASSED                    [ 50%]
+tests/test_core.py::test_qt_key_names_and_validation PASSED              [ 51%]
+tests/test_core.py::test_updater_versions_and_release_parsing PASSED     [ 52%]
+tests/test_core.py::test_input_watch_press_without_cursor_move PASSED    [ 53%]
+tests/test_core.py::test_screen_strings_from_real_game PASSED            [ 55%]
+tests/test_core.py::test_updater_tag_from_redirect PASSED                [ 56%]
+tests/test_core.py::test_questdb_loads_and_matches PASSED                [ 57%]
+tests/test_core.py::test_questdb_objectives_feed_translator PASSED       [ 58%]
+tests/test_core.py::test_data_manifest_is_fresh PASSED                   [ 60%]
+tests/test_core.py::test_datasync_uses_overlay PASSED                    [ 61%]
+tests/test_core.py::test_history_and_issue_url PASSED                    [ 62%]
+tests/test_core.py::test_community_base_roundtrip PASSED                 [ 64%]
+tests/test_core.py::test_free_engines_fall_back PASSED                   [ 65%]
+tests/test_core.py::test_block_lines_and_labels PASSED                   [ 66%]
+tests/test_core.py::test_progress_roundtrip PASSED                       [ 67%]
+tests/test_core.py::test_season_lines_and_search PASSED                  [ 69%]
+tests/test_core.py::test_season_forced_conditions_translate_locally PASSED [ 70%]
+tests/test_core.py::test_yandex_engine_and_three_way_fallback PASSED     [ 71%]
+tests/test_core.py::test_kkrb_items_and_composed_names PASSED            [ 73%]
+tests/test_core.py::test_sample_colors_finds_background_and_text PASSED  [ 74%]
+tests/test_core.py::test_translate_map_with_chinese_comma PASSED         [ 75%]
+tests/test_core.py::test_free_room_stops_at_panel_edge PASSED            [ 76%]
+tests/test_layout.py::test_short_label_stays_in_place PASSED             [ 78%]
+tests/test_layout.py::test_overlapping_items_are_pushed_down PASSED      [ 79%]
+tests/test_layout.py::test_clamped_to_screen PASSED                      [ 80%]
+tests/test_layout.py::test_long_text_shrinks_font_or_widens PASSED       [ 82%]
+tests/test_layout.py::test_empty_translation_skipped PASSED              [ 83%]
+tests/test_layout.py::test_inplace_covers_original_position PASSED       [ 84%]
+tests/test_layout.py::test_inplace_long_text_grows_right_not_over_neighbour PASSED [ 85%]
+tests/test_layout.py::test_inplace_grows_down_when_no_room_right PASSED  [ 87%]
+tests/test_layout.py::test_inplace_unbreakable_word_widens_plate PASSED  [ 88%]
+tests/test_layout.py::test_inplace_short_label_prefers_one_line PASSED   [ 89%]
+tests/test_qt_smoke.py::test_settings_window_all_pages PASSED            [ 91%]
+tests/test_qt_smoke.py::test_translation_windows_paint PASSED            [ 92%]
+tests/test_qt_smoke.py::test_quest_card PASSED                           [ 93%]
+tests/test_qt_smoke.py::test_full_app_starts_and_quits PASSED            [ 94%]
+tests/test_qt_smoke.py::test_ocr_reads_chinese PASSED                    [ 96%]
+tests/test_qt_smoke.py::test_quest_browser PASSED                        [ 97%]
+tests/test_qt_smoke.py::test_settings_window_small_sizes PASSED          [ 98%]
+tests/test_qt_smoke.py::test_bundled_fonts_load PASSED                   [100%]
+
+------- generated xml file: D:\a\df-translator\df-translator\junit.xml --------
+============================= 78 passed in 23.81s =============================
+повторы закончены
+tests 78 failures 0 errors 0
+fonts: {'ui': 'Segoe UI', 'display': 'Bahnschrift'}
+   交易行 -> Торговая биржа (22, 24, 26) (206, 206, 206)
+   仓库 -> Склад (22, 24, 26) (223, 224, 224)
+   部门 -> Отделы (22, 24, 26) (212, 212, 212)
+   特勤处 -> Спецотдел (22, 24, 26) (230, 230, 230)
+   开始游戏 -> Начать игру (22, 24, 26) (228, 228, 228)
+   临时演员 -> Статист (18, 22, 26) (240, 220, 160)
+   HA-2重型防弹衣（几乎全新） -> Тяжёлый бронежилет HA-2 (почти новый) (196, 176, 128) (30, 30, 30)
+   蓝室核心 (可透玻璃) -> Ядро Синей комнаты (видно через стекло) (196, 176, 128) (30, 30, 30)
+   任务简报 -> Брифинг (18, 22, 26) (200, 200, 200)
+   在巴克什机密/绝密行动中，前往阿萨拉集市附近民房内指定地点，超感回溯收音机处所遗留的语音线索 -> Браккеш · Секретно / Совсекретно: в отмеченном месте в жилом доме у рынка Асары считать «Ретроспекцией» голосовую улику у радиоприёмника. (18, 22, 26) (212, 212, 212)
+   潮汐监狱-医疗实验区 -> Приливная тюрьма — Медицинско-экспериментальная зона (196, 176, 128) (30, 30, 30)
+   任务奖励 -> Награда за задание (18, 22, 26) (199, 199, 199)
+   哈夫币x200000 -> Хаавк-коины ×200 000 (18, 22, 26) (211, 211, 212)
+OK ['1110x810_display.png', '1110x810_engine.png', '1110x810_history.png', '1110x810_home.png', '1110x810_quests_card.png', '1110x810_season3.png', '1240x780_display.png', '1240x780_engine.png', '1240x780_history.png', '1240x780_home.png', '1240x780_quests_card.png', '1240x780_season3.png', '560x460_display.png', '560x460_engine.png', '560x460_history.png', '560x460_home.png', '560x460_quests_card.png', '560x460_quests_list.png', '560x460_season3.png', '820x600_display.png', '820x600_engine.png', '820x600_history.png', '820x600_home.png', '820x600_quests_card.png', '820x600_season3.png', 'ingame_original.png', 'ingame_translated.png']
