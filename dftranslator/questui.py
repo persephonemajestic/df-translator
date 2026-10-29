@@ -678,6 +678,11 @@ class QuestBrowser(QWidget):
         keep = keep or (cur.data(0, Qt.ItemDataRole.UserRole) if cur else None)
         hide = self.hide_done.isChecked()
         self._building = True
+        # Пока дерево пересобирается, его сигналы выключены: при очистке Qt сообщал о строках,
+        # которые уже удаляются, и обращение к ним роняло программу.
+        self.tree.blockSignals(True)
+        self.tree.setUpdatesEnabled(False)
+        self.tree.setCurrentItem(None)
         self.tree.clear()
         grey = QBrush(QColor("#66717c"))
         total = done_total = 0
@@ -735,6 +740,8 @@ class QuestBrowser(QWidget):
                 g.addChild(it)
                 it.setHidden(done and hide and not searching and q.id not in self._keep)
             g.setExpanded(not (closed and hide and not just_closed) or searching)
+        self.tree.setUpdatesEnabled(True)
+        self.tree.blockSignals(False)
         self._building = False
         self.stats.setText(f"Выполнено: {done_total} из {total}")
         self._update_rail()
