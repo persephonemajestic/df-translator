@@ -32,8 +32,14 @@ def load_fonts() -> dict[str, str]:
     # Иероглифов и значков в этих шрифтах нет — явно говорим Qt, чем их подменять.
     from PySide6.QtGui import QFont
 
+    cjk: list[str] = []
+    for path in ("C:/Windows/Fonts/msyh.ttc", "C:/Windows/Fonts/msyh.ttf"):
+        if Path(path).exists():
+            fid = QFontDatabase.addApplicationFont(path)
+            cjk = QFontDatabase.applicationFontFamilies(fid) if fid >= 0 else []
+            break
     for fam in _FAMILIES.values():
-        QFont.insertSubstitutions(fam, ["Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", "Segoe UI Symbol",
+        QFont.insertSubstitutions(fam, cjk + ["Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", "Segoe UI Symbol",
                                         "Segoe UI Emoji", "SimSun"])
     return dict(_FAMILIES)
 
