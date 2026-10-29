@@ -46,3 +46,43 @@ def readable_fg(bg, fg):
     if fg is not None and abs(lum(fg) - lum(bg)) >= 90:
         return fg
     return (20, 22, 26) if lum(bg) > 150 else (240, 242, 246)
+
+
+def free_room(image, x0: float, y0: float, x1: float, y1: float, bg, limit: int = 1200) -> tuple[int, int]:
+    """Докуда вправо и вниз от надписи тянется тот же фон (край панели, рамка, соседний текст).
+    Возвращает (правая граница, нижняя граница) в координатах снимка — дальше плашку не растягиваем."""
+    try:
+        import numpy as np
+
+        if bg is None:
+            return image.shape[1], image.shape[0]
+        h, w = image.shape[:2]
+        ref = np.array([bg[2], bg[1], bg[0]], dtype=np.int32)   # bg в RGB, снимок в BGR
+        x0, y0, x1, y1 = int(x0), int(y0), int(x1), int(y1)
+
+        def first_edge(line) -> int | None:
+            """Индекс начала первой серии из 3 пикселей «не фона» (векторно — быстро)."""
+            if len(line) < 3:
+                return None
+            bad = np.abs(line[:, :3].astype(np.int32) - ref).sum(axis=1) > 70
+            run = bad[:-2] & bad[1:-1] & bad[2:]
+            idx = np.flatnonzero(run)
+            return int(idx[0]) if len(idx) else None
+
+        right = min(w, x1 + limit)
+        start_x = min(w - 1, x1 + 3)
+        for r in {y0 + 1, (y0 + y1) // 2, y1 - 1}:
+            if 0 <= r < h:
+                e = first_edge(image[r, start_x:right])
+                if e is not None:
+                    right = min(right, start_x + e)
+        bottom = min(h, y1 + limit)
+        start_y = min(h - 1, y1 + 3)
+        for c in {x0 + 1, (x0 + x1) // 2, x1 - 1}:
+            if 0 <= c < w:
+                e = first_edge(image[start_y:bottom, c])
+                if e is not None:
+                    bottom = min(bottom, start_y + e)
+        return int(right), int(bottom)
+    except Exception:  # noqa: BLE001
+        return image.shape[1], image.shape[0]

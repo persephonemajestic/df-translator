@@ -21,6 +21,8 @@ class Item:
     lore: bool = False
     bg: tuple[int, int, int] | None = None   # цвет фона под оригинальным текстом (для замены «на месте»)
     fg: tuple[int, int, int] | None = None   # цвет текста оригинала
+    room_right: float | None = None          # докуда вправо тянется тот же фон (край панели)
+    room_bottom: float | None = None         # докуда вниз
 
     @property
     def w(self) -> float:
@@ -140,7 +142,7 @@ def place_inplace(
 
         # 0) короткая надпись: лучше одна строка в свободное место справа, чем перенос или мелкий шрифт
         if not fits(w, h, font):
-            right0 = screen_w
+            right0 = int(it.room_right) if it.room_right else screen_w
             for o in others:
                 if o[1] < y + h and o[1] + o[3] > y and o[0] >= x + w - 2:
                     right0 = min(right0, o[0] - 2)
@@ -153,8 +155,8 @@ def place_inplace(
         while f > floor and not fits(w, h, f):
             f -= 1
         if not fits(w, h, f):
-            # 2) вправо до соседа на той же высоте или края экрана
-            right = screen_w
+            # 2) вправо до соседа на той же высоте, края панели или экрана
+            right = int(it.room_right) if it.room_right else screen_w
             for o in others:
                 if o[1] < y + h and o[1] + o[3] > y and o[0] >= x + w - 2:
                     right = min(right, o[0] - 2)
@@ -164,7 +166,7 @@ def place_inplace(
                 # 3) вниз до соседа ниже
                 _, th = measure(it.ru, f, inner(w))
                 need = th + 2 * pad
-                bottom = screen_h
+                bottom = int(it.room_bottom) if it.room_bottom else screen_h
                 for o in others:
                     if o[0] < x + w and o[0] + o[2] > x and o[1] >= y + h - 2:
                         bottom = min(bottom, o[1] - 2)

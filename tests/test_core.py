@@ -610,3 +610,15 @@ def test_translate_map_with_chinese_comma():
     from dftranslator.questdb import translate_map
 
     assert translate_map("巴克什（机密）、巴克什（绝密）") == "Браккеш (Секретно, Совсекретно)"
+
+
+def test_free_room_stops_at_panel_edge():
+    import numpy as np
+
+    from dftranslator.colors import free_room
+
+    img = np.zeros((200, 400, 3), dtype=np.uint8)
+    img[:, :] = (20, 20, 20)
+    img[20:120, 20:250] = (128, 176, 196)   # бежевая панель (BGR)
+    right, bottom = free_room(img, 40, 40, 100, 60, (196, 176, 128))
+    assert 240 <= right <= 250 and 110 <= bottom <= 120

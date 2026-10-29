@@ -75,7 +75,7 @@ def ingame_shot():
     from PySide6.QtGui import QColor, QFont, QImage, QPainter
 
     from dftranslator.blocks import group_blocks
-    from dftranslator.colors import sample_colors
+    from dftranslator.colors import free_room, sample_colors
     from dftranslator.layout import Item
     from dftranslator.ocr import OcrEngine
     from dftranslator.translate import Translator
@@ -126,7 +126,8 @@ def ingame_shot():
     items = []
     for b, r in zip(blocks, res):
         bg, fg = sample_colors(arr, b.x0, b.y0, b.x1, b.y1)
-        items.append(Item(r.zh, r.ru, b.x0, b.y0, b.x1, b.y1, b.line_h, r.source, r.lore, bg, fg))
+        rr, rb = free_room(arr, b.x0, b.y0, b.x1, b.y1, bg)
+        items.append(Item(r.zh, r.ru, b.x0, b.y0, b.x1, b.y1, b.line_h, r.source, r.lore, bg, fg, rr, rb))
         print("  ", r.zh, "->", r.ru, bg, fg)
     cfg = copy.deepcopy(DEFAULTS)
     sw = SnapshotWindow(cfg)

@@ -20,7 +20,7 @@ from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon  # noqa: E402
 from . import CREDIT, __version__, capture, datasync, inputwatch, updater  # noqa: E402
 from .community import make_issue_urls, valid_pair  # noqa: E402
 from .history import History  # noqa: E402
-from .colors import sample_colors  # noqa: E402
+from .colors import free_room, sample_colors  # noqa: E402
 from .fonts import load_fonts  # noqa: E402
 from .questdb import QuestDB  # noqa: E402
 from .blocks import group_blocks  # noqa: E402
@@ -557,10 +557,12 @@ class TranslatorApp:
             items = []
             for u, r in zip(units, results):
                 bg, fg = sample_colors(image, u[1], u[2], u[3], u[4])
+                rr, rb = free_room(image, u[1], u[2], u[3], u[4], bg)
                 items.append(Item(
                     zh=r.zh, ru=r.ru,
                     x0=u[1] + dx, y0=u[2] + dy, x1=u[3] + dx, y1=u[4] + dy,
                     line_h=u[5], source=r.source, lore=r.lore, bg=bg, fg=fg,
+                    room_right=rr + dx, room_bottom=rb + dy,
                 ))
             self._last_error = self.translator.last_error
             if self.translator.last_error:
