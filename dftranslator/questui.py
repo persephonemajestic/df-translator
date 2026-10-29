@@ -708,7 +708,10 @@ class QuestBrowser(QWidget):
             f = QFont(g.font(0))
             f.setBold(True)
             g.setFont(0, f)
-            g.setFlags(g.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsAutoTristate)
+            # Без ItemIsAutoTristate: автоматическое «полувыбранное» состояние Qt портило дерево и роняло
+            # программу при очистке списка. Состояние ветки считаем сами в _apply_states.
+            g.setFlags(g.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            g.setData(0, Qt.ItemDataRole.UserRole + 1, len(self._rows))   # номер ветки
             tip = "Галочка на ветке — закрыть / открыть все её задания"
             if items and items[0].dept == "season" and not searching and hasattr(self.db, "line_info"):
                 info = self.db.line_info(items[0].stage, items[0].line)
@@ -775,6 +778,8 @@ class QuestBrowser(QWidget):
                 closed = bool(rows) and done_n == len(rows)
                 just_closed = closed and any(q.id in self._keep for _it, q in rows)
                 g.setText(0, f"{'✓ ' if closed else ''}{title}   {done_n}/{len(rows)}")
+                g.setCheckState(0, Qt.CheckState.Checked if closed else
+                                Qt.CheckState.PartiallyChecked if done_n else Qt.CheckState.Unchecked)
                 g.setForeground(0, grey if closed else normal)
                 if first or closed:
                     g.setExpanded(not (closed and hide and not just_closed) or searching)
@@ -833,10 +838,22 @@ class QuestBrowser(QWidget):
             self._on_current(it)
             self._open_card()
 
-    def _on_item_changed(self, _it, _col) -> None:
-        if self._building:
+    def _on_item_changed(self, it, _col) -> None:
+        """Галочку поставили или сняли: запоминаем, что изменить, и сохраняем после клика."""
+        if self._building or it is None:
             return
         self._just_checked = True
+        on = it.checkState(0) == Qt.CheckState.Checked
+        pending = getattr(self, "_pending", {})
+        qid = it.data(0, Qt.ItemDataRole.UserRole)
+        if qid:
+            pending[qid] = on
+        else:  # галочка на ветке — все её задания
+            idx = it.data(0, Qt.ItemDataRole.UserRole + 1)
+            if isinstance(idx, int) and 0 <= idx < len(self._rows):
+                for _it, q in self._rows[idx][2]:
+                    pending[q.id] = on
+        self._pending = pending
         if getattr(self, "_sync_pending", False):
             return
         self._sync_pending = True
@@ -846,17 +863,16 @@ class QuestBrowser(QWidget):
 
     def _sync_from_tree(self) -> None:
         self._sync_pending = False
-        on, off = [], []
-        for _g, _title, rows in getattr(self, "_rows", []):
-            for it, q in rows:
-                checked = it.checkState(0) == Qt.CheckState.Checked
-                if checked != self.progress.is_done(q.id):
-                    (on if checked else off).append(q.id)
+        pending, self._pending = getattr(self, "_pending", {}), {}
+        on = [q for q, v in pending.items() if v and not self.progress.is_done(q)]
+        off = [q for q, v in pending.items() if not v and self.progress.is_done(q)]
         if on:
             self._keep.update(on)
             self.progress.set_many(on, True)
         if off:
             self.progress.set_many(off, False)
+        if pending and not on and not off:   # ничего не поменялось — вернуть вид строк
+            self._apply_states()
 
     def _on_progress_changed(self) -> None:
         # Перестраиваем после того, как Qt закончит обрабатывать текущий клик/галочку:
