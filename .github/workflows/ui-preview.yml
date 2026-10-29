@@ -30,20 +30,23 @@ jobs:
       - name: Зависимости
         run: pip install -r requirements.txt pytest
       - name: Тесты окон
+        continue-on-error: true
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QPA_FONTDIR: C:\Windows\Fonts
         shell: bash
         run: |
-          python -m pytest tests -q -rs -p no:faulthandler -k "not full_app and not ocr" --junitxml=junit.xml 2>&1 | tee test.log || true
+          python -X faulthandler -m pytest tests -v -rs -k "not full_app and not ocr" --junitxml=junit.xml > test.log 2>&1 || echo "pytest exit $?" >> test.log
           python -c "import xml.etree.ElementTree as E;r=E.parse('junit.xml').getroot();s=r if r.tag=='testsuite' else r[0];print('tests',s.get('tests'),'failures',s.get('failures'),'errors',s.get('errors'))" | tee -a test.log
       - name: Снимки
+        if: always()
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QPA_FONTDIR: C:\Windows\Fonts
         shell: bash
         run: python tools/ui_shots.py shots 2>&1 | tee -a test.log || true
       - name: Опубликовать снимки
+        if: always()
         shell: bash
         run: |
           cp test.log shots/ 2>/dev/null || true
