@@ -866,6 +866,9 @@ class QuestBrowser(QWidget):
 
     def _refresh_now(self) -> None:
         self._refresh_pending = False
+        if getattr(self, "_sync_pending", False):   # галочки, поставленные только что, — сначала сохранить
+            self._sync_from_tree()
+            self._refresh_pending = False
         if self._rows_key == (self.section, self.search.text().strip()) and self._rows:
             self._apply_states()
         else:
