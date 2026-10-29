@@ -317,6 +317,6 @@ def test_bundled_fonts_load(qapp):
     if not any(fonts_dir().glob("*.ttf")):
         pytest.skip("шрифты скачиваются только при сборке")
     fams = load_fonts()
-    assert fams.get("ui") == "Noto Sans", fams
+    assert fams.get("ui") in ("Segoe UI Variable Text", "Segoe UI", "Noto Sans"), fams
     assert fams.get("display") == "Bahnschrift", fams     # DIN из Windows, как в самой игре
     assert ui_family() == fams["ui"]

@@ -138,6 +138,15 @@ def place_inplace(
             # слово, которое не переносится, может оказаться шире плашки — это тоже «не влезло»
             return tw <= inner(ww) + 1 and th <= hh - 2 * pad + max(1, f // 5)
 
+        # 0) короткая надпись: лучше одна строка в свободное место справа, чем перенос или мелкий шрифт
+        if not fits(w, h, font):
+            right0 = screen_w
+            for o in others:
+                if o[1] < y + h and o[1] + o[3] > y and o[0] >= x + w - 2:
+                    right0 = min(right0, o[0] - 2)
+            one = measure(it.ru, font, 100000)[0] + 2 * pad + 2
+            if x + one <= right0 and measure(it.ru, font, 100000)[1] <= h - 2 * pad + max(1, font // 5):
+                w = one
         # 1) уменьшаем шрифт, но не ниже 70% от размера оригинала (иначе нечитаемо — лучше расширить)
         floor = max(min_font, int(font * 0.7))
         f = font

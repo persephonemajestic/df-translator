@@ -173,7 +173,7 @@ def objective_html(n: int, ru: str) -> str:
     return (f"<table cellspacing='0' cellpadding='0'><tr>"
             f"<td style=\"font-family:'{disp}'; color:{ACCENT}; font-size:{px(18)}px; font-weight:600; "
             f"padding-right:{px(10)}px;\">{n}</td>"
-            f"<td>{where_html}<p style=\"margin:0; line-height:140%;\">{_h.escape(what)}</p></td></tr></table>")
+            f"<td>{where_html}<p style=\"margin:0; line-height:118%;\">{_h.escape(what)}</p></td></tr></table>")
 
 
 class QuestCard(QWidget):
@@ -532,6 +532,13 @@ class QuestBrowser(QWidget):
 
         t = QTreeWidget()
         t.setObjectName("qtree")
+        from PySide6.QtGui import QColor, QPalette
+
+        from .settings import ACCENT_DIM
+        pal = t.palette()   # системная синяя подсветка выбранной строки — в цвет темы
+        for grp in (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive):
+            pal.setColor(grp, QPalette.ColorRole.Highlight, QColor(ACCENT_DIM))
+        t.setPalette(pal)
         t.setFocusPolicy(Qt.FocusPolicy.NoFocus)   # без системной рамки фокуса поверх строки
         t.setHeaderHidden(True)
         t.setIndentation(px(14))

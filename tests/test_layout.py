@@ -78,3 +78,8 @@ def test_inplace_unbreakable_word_widens_plate():
         return w, int(font_px * 1.3)
     p = place_inplace([item(100, 100, 130, 124, "Спецотдел")], 1920, 1080, measure, min_font=12)[0]
     assert p.w - 4 >= len("Спецотдел") * p.font_px * 0.55 - 1
+
+
+def test_inplace_short_label_prefers_one_line():
+    p = place_inplace([item(100, 100, 150, 124, "Награда за задание")], 1920, 1080, fake_measure)[0]
+    assert p.h <= 24 + 8 and p.w > 60      # одна строка, плашка расширилась вправо
