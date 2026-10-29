@@ -669,6 +669,8 @@ class QuestBrowser(QWidget):
     def rebuild(self, keep: str | None = None) -> None:
         if self.db is None:
             return
+        if getattr(self, "_sync_pending", False):   # сначала сохраняем только что поставленные галочки
+            self._sync_from_tree()
         from PySide6.QtGui import QBrush, QColor, QFont
         from PySide6.QtWidgets import QTreeWidgetItem
 

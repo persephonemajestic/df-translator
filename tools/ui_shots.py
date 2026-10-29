@@ -19,6 +19,10 @@ from dftranslator.quests import QuestBook  # noqa: E402
 from dftranslator.questui import ImageLoader, QuestBrowser  # noqa: E402
 from dftranslator.settings import SettingsWindow, detect_scale  # noqa: E402
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:  # noqa: BLE001
+    pass
 out = Path(sys.argv[1] if len(sys.argv) > 1 else "shots")
 out.mkdir(parents=True, exist_ok=True)
 app = QApplication([])
