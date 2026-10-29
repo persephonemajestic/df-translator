@@ -48,14 +48,15 @@ jobs:
           sed -i "s/^__version__ = .*/__version__ = \"$VERSION\"/" dftranslator/__init__.py
           grep __version__ dftranslator/__init__.py
 
-      - name: Шрифты (Golos Text, Unbounded — SIL OFL)
+      - name: Шрифты (Noto Sans с хинтингом — SIL OFL)
         shell: bash
         run: |
           mkdir -p assets/fonts
-          base=https://raw.githubusercontent.com/google/fonts/main/ofl
-          curl -sSfL -o "assets/fonts/GolosText[wght].ttf" "$base/golostext/GolosText%5Bwght%5D.ttf"
-          curl -sSfL -o "assets/fonts/Unbounded[wght].ttf" "$base/unbounded/Unbounded%5Bwght%5D.ttf"
-          curl -sSfL -o "assets/fonts/OFL.txt" "$base/golostext/OFL.txt"
+          base=https://raw.githubusercontent.com/notofonts/notofonts.github.io/main/fonts/NotoSans/hinted/ttf
+          for w in Regular Medium SemiBold Bold; do
+            curl -sSfL -o "assets/fonts/NotoSans-$w.ttf" "$base/NotoSans-$w.ttf"
+          done
+          curl -sSfL -o assets/fonts/OFL.txt https://raw.githubusercontent.com/notofonts/latin-greek-cyrillic/main/OFL.txt || true
           ls -la assets/fonts
       - name: Зависимости
         shell: bash

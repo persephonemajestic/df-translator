@@ -1,7 +1,10 @@
-"""Встроенные шрифты: Golos Text (текст интерфейса и перевод на экране) и Unbounded (заголовки).
+"""Шрифты в стиле Delta Force.
 
-Оба под лицензией SIL OFL, сделаны с полной поддержкой кириллицы. Файлы кладёт в assets/fonts
-сборка на GitHub; если их нет (запуск из исходников), берутся системные шрифты.
+У самой игры: DIN 2014 в заголовках и Noto Sans в тексте. Поэтому:
+  • текст — Noto Sans (статичные начертания с хинтингом: чёткие на тёмном фоне при любом размере),
+    файлы кладёт в assets/fonts сборка на GitHub (лицензия SIL OFL);
+  • заголовки — Bahnschrift: это DIN, встроенный в Windows 10/11, с кириллицей.
+Если чего-то нет, берутся Segoe UI / Segoe UI Semibold.
 """
 from __future__ import annotations
 
@@ -20,27 +23,26 @@ def fonts_dir() -> Path:
 
 def load_fonts() -> dict[str, str]:
     """Регистрирует шрифты в Qt. Вызывать после создания QApplication."""
-    from PySide6.QtGui import QFontDatabase
+    from PySide6.QtGui import QFont, QFontDatabase
 
-    for key, pattern in (("ui", "GolosText*.ttf"), ("display", "Unbounded*.ttf")):
-        for path in sorted(fonts_dir().glob(pattern)):
-            fid = QFontDatabase.addApplicationFont(str(path))
-            fams = QFontDatabase.applicationFontFamilies(fid) if fid >= 0 else []
-            if fams:
-                _FAMILIES[key] = fams[0]
-                break
-    # Иероглифов и значков в этих шрифтах нет — явно говорим Qt, чем их подменять.
-    from PySide6.QtGui import QFont
+    for path in sorted(fonts_dir().glob("NotoSans-*.ttf")):
+        fid = QFontDatabase.addApplicationFont(str(path))
+        fams = QFontDatabase.applicationFontFamilies(fid) if fid >= 0 else []
+        if fams and "ui" not in _FAMILIES:
+            _FAMILIES["ui"] = "Noto Sans" if "Noto Sans" in fams else fams[0]
+    if "Bahnschrift" in QFontDatabase.families():
+        _FAMILIES["display"] = "Bahnschrift"
 
+    # Иероглифов и части значков в этих шрифтах нет — явно говорим Qt, чем их подменять.
     cjk: list[str] = []
     for path in ("C:/Windows/Fonts/msyh.ttc", "C:/Windows/Fonts/msyh.ttf"):
         if Path(path).exists():
             fid = QFontDatabase.addApplicationFont(path)
             cjk = QFontDatabase.applicationFontFamilies(fid) if fid >= 0 else []
             break
-    for fam in _FAMILIES.values():
+    for fam in set(_FAMILIES.values()):
         QFont.insertSubstitutions(fam, cjk + ["Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", "Segoe UI Symbol",
-                                        "Segoe UI Emoji", "SimSun"])
+                                              "Segoe UI Emoji", "SimSun"])
     return dict(_FAMILIES)
 
 

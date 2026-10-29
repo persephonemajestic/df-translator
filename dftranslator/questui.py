@@ -278,7 +278,7 @@ class QuestCard(QWidget):
                 th = ClickLabel("…")
                 th.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 th.setFixedSize(px(210), px(124))
-                th.setStyleSheet(f"background:#141920;border:1px solid #2e3843;border-radius:{px(8)}px;color:#97a3ae;")
+                th.setStyleSheet(f"background:#08131a;border:1px solid #1d3140;border-radius:{px(8)}px;color:#8d9ca6;")
                 th.setCursor(Qt.CursorShape.PointingHandCursor)
                 th.setToolTip("Открыть крупно")
                 th.clicked.connect(lambda i=i, urls=urls: self.viewer.open(urls, i))
@@ -382,25 +382,26 @@ def browser_qss() -> str:
     return f"""
 QFrame#rail {{ background: transparent; }}
 QLabel#railcap {{ color: {MUTED}; font-size: {px(13)}px; font-weight: 600; padding: {px(8)}px {px(4)}px {px(2)}px {px(4)}px; }}
-QPushButton#railbtn {{ text-align: left; padding: {px(9)}px {px(12)}px; border-radius: {px(10)}px; background: {CARD};
+QPushButton#railbtn {{ text-align: left; padding: {px(9)}px {px(12)}px; border-radius: {px(4)}px; background: {CARD};
   border: 1px solid {LINE}; color: {TEXT}; }}
-QPushButton#railbtn:hover {{ border-color: #44515f; }}
-QPushButton#railbtn:checked {{ background: {ACCENT_DIM}; border: 1px solid {ACCENT}; color: {ACCENT}; font-weight: 700; }}
-QPushButton#railbtn:disabled {{ color: #5b6672; background: #1b2128; }}
-QTreeWidget#qtree {{ background: {CARD}; border: 1px solid {LINE}; border-radius: {px(12)}px; padding: {px(4)}px; outline: 0; }}
+QPushButton#railbtn:hover {{ border-color: #2c4a5e; }}
+QPushButton#railbtn:checked {{ background: {ACCENT_DIM}; border: 1px solid {ACCENT}; border-left: {px(4)}px solid {ACCENT};
+  color: {ACCENT}; font-weight: 700; }}
+QPushButton#railbtn:disabled {{ color: #4c5c66; background: #0a141b; }}
+QTreeWidget#qtree {{ background: {CARD}; border: 1px solid {LINE}; border-radius: {px(4)}px; padding: {px(4)}px; outline: 0; }}
 QTreeWidget#qtree::item {{ padding: {px(7)}px {px(4)}px; border-radius: {px(6)}px; }}
-QTreeWidget#qtree::item:hover {{ background: #252e37; }}
-QTreeWidget#qtree::item:selected {{ background: {ACCENT_DIM}; color: {TEXT}; }}
-QTreeWidget#qtree::indicator {{ width: {px(16)}px; height: {px(16)}px; border: 1px solid #44515f; border-radius: {px(4)}px;
-  background: #141920; }}
+QTreeWidget#qtree::item:hover {{ background: #10202a; }}
+QTreeWidget#qtree::item:selected {{ background: {ACCENT_DIM}; color: {TEXT}; border-left: {px(3)}px solid {ACCENT}; }}
+QTreeWidget#qtree::indicator {{ width: {px(16)}px; height: {px(16)}px; border: 1px solid #2c4a5e; border-radius: {px(4)}px;
+  background: #08131a; }}
 QTreeWidget#qtree::indicator:hover {{ border-color: {ACCENT}; }}
 QTreeWidget#qtree::indicator:checked {{ background: {DONE}; border-color: {DONE}; image: url("{icon_file('check', CHECK_SVG)}"); }}
-QTreeWidget#qtree::indicator:indeterminate {{ background: #5d6b47; border-color: #5d6b47; image: url("{icon_file('dash', DASH_SVG)}"); }}
-QLabel#unlock {{ color: #e9a23b; font-size: {px(12)}px; }}
+QTreeWidget#qtree::indicator:indeterminate {{ background: #1d8a64; border-color: #1d8a64; image: url("{icon_file('dash', DASH_SVG)}"); }}
+QLabel#unlock {{ color: #ffa24a; font-size: {px(12)}px; }}
 """
 
 
-TEXT_COLOR = "#ece7dc"
+TEXT_COLOR = "#e7e9ea"
 
 
 class QuestBrowser(QWidget):
@@ -749,7 +750,7 @@ class QuestBrowser(QWidget):
 
         hide = self.hide_done.isChecked()
         searching = bool(self.search.text().strip())
-        grey, normal = QBrush(QColor("#66717c")), QBrush(QColor(TEXT_COLOR))
+        grey, normal = QBrush(QColor("#5f6f79")), QBrush(QColor(TEXT_COLOR))
         was = self.tree.signalsBlocked()
         self.tree.blockSignals(True)
         self._building = True

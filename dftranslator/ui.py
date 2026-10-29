@@ -11,8 +11,8 @@ from .colors import readable_fg
 from .layout import Item, Placed, place, place_inplace
 
 PAD = 5
-LORE_DOT = QColor(147, 180, 111)      # зелёная точка: перевод из лор-глоссария
-MACHINE_DOT = QColor(233, 162, 59)   # жёлтая точка: машинный перевод
+LORE_DOT = QColor(47, 211, 154)      # зелёная точка: перевод из лор-глоссария
+MACHINE_DOT = QColor(255, 162, 74)   # жёлтая точка: машинный перевод
 
 
 def _flag(*flags) -> int:
@@ -67,7 +67,6 @@ class OverlayWindow(QWidget):
         f = QFont(ui_family())
         f.setPixelSize(px)
         f.setWeight(QFont.Weight.Medium)
-        f.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
         return f
 
     def _measure(self, text: str, font_px: int, max_w: int) -> tuple[int, int]:
@@ -151,8 +150,8 @@ class OverlayWindow(QWidget):
             fm = QFontMetrics(f)
             w, h = fm.horizontalAdvance(self.hint) + 28, fm.height() + 14
             r = QRect((self.width() - w) // 2, self.height() - h - 24, w, h)
-            p.setPen(QPen(QColor(214, 174, 98, 220), 1))
-            p.setBrush(QColor(16, 18, 24, 235))
+            p.setPen(QPen(QColor(40, 251, 177, 220), 1))
+            p.setBrush(QColor(7, 15, 20, 240))
             p.drawRoundedRect(r, h / 2, h / 2)
             p.setFont(f)
             p.setPen(QColor(232, 235, 240))
@@ -228,7 +227,7 @@ class PanelWindow(QWidget):
         self.browser = QTextBrowser(self)
         self.browser.setOpenLinks(False)
         self.browser.setStyleSheet(
-            "QTextBrowser { background:#161b21; color:#ece7dc; border:0; padding:8px; font-size:14px; "
+            "QTextBrowser { background:#070f14; color:#e7e9ea; border:0; padding:8px; font-size:14px; "
             "font-family: \"Golos Text\", \"Segoe UI\", \"Microsoft YaHei UI\"; }"
         )
         lay = QVBoxLayout(self)
@@ -247,16 +246,16 @@ class PanelWindow(QWidget):
     def show_items(self, items: list[Item], hint: str = "") -> None:
         rows = []
         if hint and self.cfg["display"].get("show_hint", True):
-            rows.append(f"<div style='color:#e6c27a;margin:0 0 14px 0'>{html.escape(hint)}</div>")
+            rows.append(f"<div style='color:#7dffd0;margin:0 0 14px 0'>{html.escape(hint)}</div>")
         for it in sorted(items, key=lambda i: (round(i.y0 / 12), i.x0)):
-            dot = "#93b46f" if it.lore else "#e9a23b"
+            dot = "#2fd39a" if it.lore else "#ffa24a"
             ru = html.escape(it.ru) if it.ru else "<i style='color:#c66'>нет перевода</i>"
             rows.append(
                 f"<div style='margin:0 0 12px 0'>"
-                f"<div style='color:#97a3ae;font-size:11px'>{html.escape(it.zh)}</div>"
+                f"<div style='color:#8d9ca6;font-size:11px'>{html.escape(it.zh)}</div>"
                 f"<div><span style='color:{dot}'>●</span> {ru}</div></div>"
             )
-        self.browser.setHtml("".join(rows) or "<i style='color:#97a3ae'>Китайский текст не найден</i>")
+        self.browser.setHtml("".join(rows) or "<i style='color:#8d9ca6'>Китайский текст не найден</i>")
         self.show()
         self.raise_()
 
@@ -291,7 +290,7 @@ class RegionSelector(QWidget):
         r = self._rect()
         if r:
             p.drawPixmap(r, self.pix, r)
-            p.setPen(QPen(QColor(214, 174, 98), 2))
+            p.setPen(QPen(QColor(40, 251, 177), 2))
             p.drawRect(r)
             p.setPen(QColor(255, 255, 255))
             p.drawText(r.left() + 4, max(14, r.top() - 6), f"{r.width()}×{r.height()}")
