@@ -70,3 +70,11 @@ def test_inplace_grows_down_when_no_room_right():
     a = item(1800, 100, 1900, 120, "Длинный перевод у правого края экрана, который не влезает")
     p = place_inplace([a], 1920, 1080, fake_measure, min_font=9)[0]
     assert p.x + p.w <= 1920 and p.h > 24
+
+
+def test_inplace_unbreakable_word_widens_plate():
+    def measure(text, font_px, max_w):   # одно длинное слово не переносится
+        w = len(text) * font_px * 0.55
+        return w, int(font_px * 1.3)
+    p = place_inplace([item(100, 100, 130, 124, "Спецотдел")], 1920, 1080, measure, min_font=12)[0]
+    assert p.w - 4 >= len("Спецотдел") * p.font_px * 0.55 - 1

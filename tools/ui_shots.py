@@ -120,6 +120,7 @@ def ingame_shot():
         print("OCR недоступен:", exc)
         return
     blocks = group_blocks(lines)
+    book.add_objectives(db.objectives)
     tr = Translator(g, book, {"engine": "google", "engines": {}}, None)
     res = tr.translate([b.text for b in blocks])
     items = []

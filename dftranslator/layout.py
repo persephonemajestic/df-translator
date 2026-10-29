@@ -122,7 +122,9 @@ def place_inplace(
       3) соседние надписи при этом не перекрываются, если только места нет совсем.
     """
     src = [it for it in items if it.ru.strip()]
-    rects = [(int(it.x0) - pad, int(it.y0) - pad, int(it.w) + 2 * pad, int(it.h) + 2 * pad) for it in src]
+    # запас вокруг рамки OCR: рамка плотная, а хвосты иероглифов и сглаживание выходят за неё
+    pads = [max(pad, round((it.line_h or it.h) * 0.16)) for it in src]
+    rects = [(int(it.x0) - pd, int(it.y0) - pd, int(it.w) + 2 * pd, int(it.h) + 2 * pd) for it, pd in zip(src, pads)]
     out: list[Placed] = []
     for i, it in enumerate(src):
         x, y, w, h = rects[i]
@@ -133,7 +135,8 @@ def place_inplace(
 
         def fits(ww: int, hh: int, f: int) -> bool:
             tw, th = measure(it.ru, f, inner(ww))
-            return th <= hh - 2 * pad + max(1, f // 5)
+            # слово, которое не переносится, может оказаться шире плашки — это тоже «не влезло»
+            return tw <= inner(ww) + 1 and th <= hh - 2 * pad + max(1, f // 5)
 
         # 1) уменьшаем шрифт, но не ниже 70% от размера оригинала (иначе нечитаемо — лучше расширить)
         floor = max(min_font, int(font * 0.7))

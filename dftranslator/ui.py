@@ -128,7 +128,8 @@ class OverlayWindow(QWidget):
 
     def _paint_inplace(self, p: QPainter, d: dict, alpha: int) -> None:
         """Плашка цвета фона закрывает оригинал, поверх — перевод цветом оригинального текста."""
-        a = max(alpha, 240)  # китайский текст должен быть закрыт полностью
+        a = 255  # китайский текст закрываем полностью, иначе он просвечивает сквозь перевод
+        del alpha
         for it in self.placed:
             rect = QRect(it.x, it.y, it.w, it.h)
             bg = it.bg or (16, 18, 24)
