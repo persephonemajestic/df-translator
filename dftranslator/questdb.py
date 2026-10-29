@@ -80,7 +80,7 @@ class Quest:
         """Группа в списке: карта (для отделов) или ветка сезона."""
         if self.dept == "season":
             return f"{self.stage:02d}|{self.line}"
-        first = re.split(r"[,，]", self.map or "")[0]
+        first = re.split(r"[,，、]", self.map or "")[0]
         base = re.sub(r"[（(].*$", "", first).strip()
         return base or "局外"
 
@@ -107,7 +107,7 @@ class Quest:
 
 
 def translate_map(text: str) -> str:
-    parts = [p.strip() for p in re.split(r"[,，]", text or "") if p.strip()]
+    parts = [p.strip() for p in re.split(r"[,，、]", text or "") if p.strip()]
     grouped: dict[str, list[str]] = {}
     for p in parts:
         m = re.match(r"^(.+?)[（(](.+?)[)）]$", p)

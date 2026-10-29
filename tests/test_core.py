@@ -604,3 +604,9 @@ def test_sample_colors_finds_background_and_text():
     assert bg == (20, 30, 40) and fg is not None and fg[0] > 200
     assert readable_fg(bg, fg) == fg
     assert readable_fg((240, 240, 240), (230, 230, 230)) == (20, 22, 26)
+
+
+def test_translate_map_with_chinese_comma():
+    from dftranslator.questdb import translate_map
+
+    assert translate_map("巴克什（机密）、巴克什（绝密）") == "Браккеш (Секретно, Совсекретно)"

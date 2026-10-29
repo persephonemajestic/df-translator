@@ -41,6 +41,7 @@ DEFAULTS: dict = {
         "panel_always_on_top": True,
         "show_source_dots": True,
         "show_hint": True,
+        "inplace": True,  # перевод ложится на место китайского текста
         "hide_on_input": True,     # убирать перевод после любого нажатия клавиши/кнопки мыши
         "hide_delay_sec": 1.5,     # через сколько секунд после нажатия
     },

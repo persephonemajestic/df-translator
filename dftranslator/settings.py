@@ -1085,7 +1085,7 @@ class SettingsWindow(QWidget):
 
     _SWITCHES = {
         "dots": "display.show_source_dots", "on_top": "display.panel_always_on_top",
-        "merge": "ocr.merge_lines", "upscale": "ocr.region_upscale", "auto_update": "updates.auto", "hint": "display.show_hint", "hide_on_input": "display.hide_on_input",
+        "merge": "ocr.merge_lines", "upscale": "ocr.region_upscale", "auto_update": "updates.auto", "hint": "display.show_hint", "hide_on_input": "display.hide_on_input", "inplace": "display.inplace",
     }
 
     def _switch_row(self, key: str, title: str, hint: str) -> QWidget:
@@ -1116,6 +1116,10 @@ class SettingsWindow(QWidget):
         cl.addWidget(self._slider_row("auto_hide", "display.auto_hide_sec", "Автоскрытие", "Через сколько секунд убирать перевод. 0 — не убирать.", 0, 60, lambda v: "выкл" if v == 0 else f"{v} с"))
         lay.addWidget(c)
         c2, c2l = card()
+        c2l.addWidget(self._switch_row("inplace", "Перевод на месте оригинала",
+                                       "Русский текст закрывает китайский там же, в цветах игры. "
+                                       "Выключите — перевод будет отдельными плашками."))
+        c2l.addWidget(sep())
         c2l.addWidget(self._switch_row("hint", "Подсказка «как убрать перевод»", "Маленькая надпись с горячей клавишей, пока перевод на экране."))
         c2l.addWidget(sep())
         c2l.addWidget(self._switch_row("dots", "Цветные точки источника", "Зелёная — глоссарий, жёлтая — машинный перевод."))

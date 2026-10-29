@@ -228,7 +228,8 @@ class PanelWindow(QWidget):
         self.browser = QTextBrowser(self)
         self.browser.setOpenLinks(False)
         self.browser.setStyleSheet(
-            "QTextBrowser { background:#161b21; color:#ece7dc; border:0; padding:8px; font-size:14px; }"
+            "QTextBrowser { background:#161b21; color:#ece7dc; border:0; padding:8px; font-size:14px; "
+            "font-family: \"Golos Text\", \"Segoe UI\", \"Microsoft YaHei UI\"; }"
         )
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
