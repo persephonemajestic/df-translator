@@ -482,17 +482,8 @@ class QuestBrowser(QWidget):
         self.unlock = label("", "unlock", wrap=True)
         self.unlock.setVisible(False)
         mid.addWidget(self.unlock)
-        self.tree = QTreeWidget()
-        self.tree.setObjectName("qtree")
-        self.tree.setFocusPolicy(Qt.FocusPolicy.NoFocus)   # без системной рамки фокуса поверх строки
-        self.tree.setHeaderHidden(True)
-        self.tree.setIndentation(px(14))
-        self.tree.setMinimumWidth(px(220))
-        self.tree.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.tree.setTextElideMode(Qt.TextElideMode.ElideRight)
-        self.tree.itemChanged.connect(self._on_item_changed)
-        self.tree.currentItemChanged.connect(self._on_current)
-        self.tree.itemClicked.connect(self._on_clicked)
+        self._mid = mid
+        self.tree = self._make_tree()
         mid.addWidget(self.tree, 1)
         self.stats = label("", "muted")
         mid.addWidget(self.stats)
@@ -509,6 +500,22 @@ class QuestBrowser(QWidget):
         root.addWidget(self.card, 1)
         progress.listeners.append(self._on_progress_changed)
         self._apply_mode()
+
+    def _make_tree(self):
+        from PySide6.QtWidgets import QTreeWidget
+
+        t = QTreeWidget()
+        t.setObjectName("qtree")
+        t.setFocusPolicy(Qt.FocusPolicy.NoFocus)   # без системной рамки фокуса поверх строки
+        t.setHeaderHidden(True)
+        t.setIndentation(px(14))
+        t.setMinimumWidth(px(220))
+        t.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        t.setTextElideMode(Qt.TextElideMode.ElideRight)
+        t.itemChanged.connect(self._on_item_changed)
+        t.currentItemChanged.connect(self._on_current)
+        t.itemClicked.connect(self._on_clicked)
+        return t
 
     # ------------------------------------------------------------ раскладка
     def resizeEvent(self, e) -> None:  # noqa: N802
@@ -687,13 +694,18 @@ class QuestBrowser(QWidget):
         keep = keep or (cur.data(0, Qt.ItemDataRole.UserRole) if cur else None)
         hide = self.hide_done.isChecked()
         self._building = True
-        # Пока дерево пересобирается, его сигналы выключены: при очистке Qt сообщал о строках,
-        # которые уже удаляются, и обращение к ним роняло программу.
+        # Новый список вместо очистки старого. Синхронная очистка дерева (clear) иногда роняла
+        # программу, если в этот момент Qt ещё обрабатывал клик или галочку в нём. Старый список
+        # удаляется отложенно — когда Qt закончит с ним все дела.
+        old = self.tree
+        old.blockSignals(True)
+        self._rows = []
+        self.tree = self._make_tree()
         self.tree.blockSignals(True)
         self.tree.setUpdatesEnabled(False)
-        self.tree.setCurrentItem(None)
-        self._rows = []   # старые строки сейчас будут удалены — не держим на них ссылок
-        self.tree.clear()
+        self._mid.replaceWidget(old, self.tree)
+        old.hide()
+        old.deleteLater()
         searching = bool(self.search.text().strip())
         unlock = ""
         if self.section.startswith("season:") and not searching and hasattr(self.db, "stage_unlock"):

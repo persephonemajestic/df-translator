@@ -38,7 +38,7 @@ jobs:
         shell: bash
         run: |
           python -X faulthandler -m pytest tests -v -rs --junitxml=junit.xml > test.log 2>&1 || echo "pytest exit $?" >> test.log
-          for i in $(seq 1 20); do python -X faulthandler -m pytest tests/test_qt_smoke.py -q -k "quest_browser or quest_card or small_sizes" > rep.log 2>&1 || { echo "== прогон $i упал"; cat rep.log; } >> test.log; done
+          for i in $(seq 1 30); do python -X faulthandler -m pytest tests/test_qt_smoke.py -q -k "quest_browser or quest_card or small_sizes" > rep.log 2>&1 || { echo "== прогон $i упал"; cat rep.log; } >> test.log; done
           echo "повторы закончены" >> test.log
           python -c "import xml.etree.ElementTree as E;r=E.parse('junit.xml').getroot();s=r if r.tag=='testsuite' else r[0];print('tests',s.get('tests'),'failures',s.get('failures'),'errors',s.get('errors'))" | tee -a test.log
       - name: Снимки
