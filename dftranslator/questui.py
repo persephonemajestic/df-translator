@@ -701,10 +701,12 @@ class QuestBrowser(QWidget):
         self.unlock.setText("🔓 " + unlock if unlock else "")
         self.unlock.setVisible(bool(unlock) and self.height() >= px(480))
         self.combo.setToolTip(unlock or "Раздел: отдел или этап сезона")
-        self._rows = []   # (строка ветки, заголовок, [(строка задания, квест)])
+        # Храним только заголовки и квесты, а не сами строки: ссылки Python на строки дерева после
+        # очистки списка указывали в освобождённую память (отсюда вылеты). Строки берём у дерева.
+        self._rows = []   # (заголовок ветки, [квесты])
         self._rows_key = (self.section, self.search.text().strip())
         for title, items in self._groups():
-            g = QTreeWidgetItem([title])
+            g = QTreeWidgetItem(self.tree, [title])   # родитель сразу в конструкторе: строкой владеет Qt
             f = QFont(g.font(0))
             f.setBold(True)
             g.setFont(0, f)
@@ -718,8 +720,7 @@ class QuestBrowser(QWidget):
                 if info.get("goal"):
                     tip = f"{info['goal']}\n{tip}"
             g.setToolTip(0, f"{title}\n{tip}")
-            self.tree.addTopLevelItem(g)
-            rows = []
+            quests = []
             for q in items:
                 sub = q.name
                 if searching:
@@ -733,19 +734,27 @@ class QuestBrowser(QWidget):
                     sub += f" · 📷 {len(q.images)}"
                 if q.forced:
                     sub += " · ⚠"
-                it = QTreeWidgetItem([f"{q.name_ru or q.name}\n{sub}"])
+                it = QTreeWidgetItem(g, [f"{q.name_ru or q.name}\n{sub}"])
                 it.setData(0, Qt.ItemDataRole.UserRole, q.id)
                 it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
                 it.setToolTip(0, f"{q.name_ru or q.name}\n{q.name}\nГалочка — задание выполнено")
-                g.addChild(it)
-                rows.append((it, q))
-            self._rows.append((g, title, rows))
+                quests.append(q)
+            self._rows.append((title, quests))
         self._apply_states(first=True)
         self.tree.setUpdatesEnabled(True)
         self.tree.blockSignals(False)
         self._building = False
         if keep:
             self._select_item(keep)
+
+    def _iter_rows(self):
+        """(строка ветки, заголовок, [(строка задания, квест)]) — строки берутся у дерева при каждом вызове."""
+        n = min(self.tree.topLevelItemCount(), len(self._rows))
+        for i in range(n):
+            g = self.tree.topLevelItem(i)
+            title, quests = self._rows[i]
+            m = min(g.childCount(), len(quests))
+            yield g, title, [(g.child(j), quests[j]) for j in range(m)]
 
     def _apply_states(self, first: bool = False) -> None:
         """Галочки, серый цвет, скрытие и счётчики — без пересоздания строк.
@@ -762,7 +771,7 @@ class QuestBrowser(QWidget):
         self._building = True
         total = done_total = 0
         try:
-            for g, title, rows in self._rows:
+            for g, title, rows in self._iter_rows():
                 done_n = 0
                 for it, q in rows:
                     done = self.progress.is_done(q.id)
@@ -851,7 +860,7 @@ class QuestBrowser(QWidget):
         else:  # галочка на ветке — все её задания
             idx = it.data(0, Qt.ItemDataRole.UserRole + 1)
             if isinstance(idx, int) and 0 <= idx < len(self._rows):
-                for _it, q in self._rows[idx][2]:
+                for q in self._rows[idx][1]:
                     pending[q.id] = on
         self._pending = pending
         if getattr(self, "_sync_pending", False):
