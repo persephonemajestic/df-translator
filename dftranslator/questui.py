@@ -392,6 +392,8 @@ QTreeWidget#qtree {{ background: {CARD}; border: 1px solid {LINE}; border-radius
 QTreeWidget#qtree::item {{ padding: {px(7)}px {px(4)}px; border-radius: {px(6)}px; }}
 QTreeWidget#qtree::item:hover {{ background: #10202a; }}
 QTreeWidget#qtree::item:selected {{ background: {ACCENT_DIM}; color: {TEXT}; border-left: {px(3)}px solid {ACCENT}; }}
+QTreeWidget#qtree::branch {{ background: transparent; }}
+QTreeWidget#qtree::branch:selected {{ background: transparent; border: 0; }}
 QTreeWidget#qtree::indicator {{ width: {px(16)}px; height: {px(16)}px; border: 1px solid #2c4a5e; border-radius: {px(4)}px;
   background: #08131a; }}
 QTreeWidget#qtree::indicator:hover {{ border-color: {ACCENT}; }}
@@ -482,6 +484,7 @@ class QuestBrowser(QWidget):
         mid.addWidget(self.unlock)
         self.tree = QTreeWidget()
         self.tree.setObjectName("qtree")
+        self.tree.setFocusPolicy(Qt.FocusPolicy.NoFocus)   # без системной рамки фокуса поверх строки
         self.tree.setHeaderHidden(True)
         self.tree.setIndentation(px(14))
         self.tree.setMinimumWidth(px(220))
