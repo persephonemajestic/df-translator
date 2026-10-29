@@ -155,6 +155,27 @@ class ImageViewer(QWidget):
             self.close()
 
 
+def objective_html(n: int, ru: str) -> str:
+    """Цель квеста: номер зелёной цифрой, «где» (карта · режим) — отдельной строкой шрифтом DIN,
+    «что сделать» — основным текстом с воздухом между строками."""
+    import html as _h
+
+    from .fonts import display_family
+    from .settings import ACCENT, MUTED
+
+    where, what = "", ru
+    head, sep, tail = ru.partition(": ")
+    if sep and len(head) <= 70 and ("·" in head or "Любая карта" in head):
+        where, what = head, tail[:1].upper() + tail[1:]
+    disp = display_family()
+    where_html = (f"<div style=\"font-family:'{disp}'; color:{MUTED}; font-size:{px(13)}px; letter-spacing:0.3px;\">"
+                  f"{_h.escape(where)}</div>") if where else ""
+    return (f"<table cellspacing='0' cellpadding='0'><tr>"
+            f"<td style=\"font-family:'{disp}'; color:{ACCENT}; font-size:{px(18)}px; font-weight:600; "
+            f"padding-right:{px(10)}px;\">{n}</td>"
+            f"<td>{where_html}<p style=\"margin:0; line-height:140%;\">{_h.escape(what)}</p></td></tr></table>")
+
+
 class QuestCard(QWidget):
     """Окно с карточкой квеста. Открывается из раздела «Квесты» или горячей клавишей «Гид по квесту»."""
 
@@ -245,10 +266,12 @@ class QuestCard(QWidget):
         for n, (zh, ru) in enumerate(quest.objectives, 1):
             row = QVBoxLayout()
             row.setSpacing(px(2))
-            t = plain(f"{n}. {ru}")
+            t = label(objective_html(n, ru), "", wrap=True)
+            t.setTextFormat(Qt.TextFormat.RichText)
             t.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             row.addWidget(t)
             z = plain(zh, "muted")
+            z.setContentsMargins(px(24), 0, 0, 0)   # под текстом цели, а не под номером
             z.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             row.addWidget(z)
             cl.addLayout(row)
@@ -377,18 +400,21 @@ SPLIT_MIN = 640     # выпадающий список разделов + сп�
 
 
 def browser_qss() -> str:
+    from .fonts import display_family
     from .settings import ACCENT, ACCENT_DIM, CARD, CHECK_SVG, DASH_SVG, DONE, LINE, MUTED, TEXT, icon_file
+
+    disp = display_family()
 
     return f"""
 QFrame#rail {{ background: transparent; }}
 QLabel#railcap {{ color: {MUTED}; font-size: {px(13)}px; font-weight: 600; padding: {px(8)}px {px(4)}px {px(2)}px {px(4)}px; }}
-QPushButton#railbtn {{ text-align: left; padding: {px(9)}px {px(12)}px; border-radius: {px(4)}px; background: {CARD};
+QPushButton#railbtn {{ font-size: {px(15)}px; text-align: left; padding: {px(9)}px {px(12)}px; border-radius: {px(4)}px; background: {CARD};
   border: 1px solid {LINE}; color: {TEXT}; }}
 QPushButton#railbtn:hover {{ border-color: #2c4a5e; }}
 QPushButton#railbtn:checked {{ background: {ACCENT_DIM}; border: 1px solid {ACCENT}; border-left: {px(4)}px solid {ACCENT};
   color: {ACCENT}; font-weight: 700; }}
 QPushButton#railbtn:disabled {{ color: #4c5c66; background: #0a141b; }}
-QTreeWidget#qtree {{ background: {CARD}; border: 1px solid {LINE}; border-radius: {px(4)}px; padding: {px(4)}px; outline: 0; }}
+QTreeWidget#qtree {{ font-family: "{disp}"; font-size: {px(15)}px; background: {CARD}; border: 1px solid {LINE}; border-radius: {px(4)}px; padding: {px(4)}px; outline: 0; }}
 QTreeWidget#qtree::item {{ padding: {px(7)}px {px(4)}px; border-radius: {px(6)}px; }}
 QTreeWidget#qtree::item:hover {{ background: #10202a; }}
 QTreeWidget#qtree::item:selected {{ background: {ACCENT_DIM}; color: {TEXT}; border-left: {px(3)}px solid {ACCENT}; }}

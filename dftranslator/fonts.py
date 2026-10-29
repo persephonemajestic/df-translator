@@ -1,10 +1,9 @@
 """Шрифты в стиле Delta Force.
 
-У самой игры: DIN 2014 в заголовках и Noto Sans в тексте. Поэтому:
-  • текст — Noto Sans (статичные начертания с хинтингом: чёткие на тёмном фоне при любом размере),
-    файлы кладёт в assets/fonts сборка на GitHub (лицензия SIL OFL);
-  • заголовки — Bahnschrift: это DIN, встроенный в Windows 10/11, с кириллицей.
-Если чего-то нет, берутся Segoe UI / Segoe UI Semibold.
+  • Заголовки, названия, кнопки, меню и перевод поверх игры — Bahnschrift: это DIN (фирменный
+    шрифт Delta Force), встроенный в Windows 10/11, с кириллицей; узкий — длинный русский влезает.
+  • Длинный текст в окне — Segoe UI (Variable): родной шрифт Windows, самый чёткий на экране.
+  • Noto Sans (кладёт сборка на GitHub) — запасной вариант, если чего-то нет.
 """
 from __future__ import annotations
 
@@ -25,12 +24,18 @@ def load_fonts() -> dict[str, str]:
     """Регистрирует шрифты в Qt. Вызывать после создания QApplication."""
     from PySide6.QtGui import QFont, QFontDatabase
 
-    for path in sorted(fonts_dir().glob("NotoSans-*.ttf")):
+    for path in sorted(fonts_dir().glob("NotoSans-*.ttf")):   # запасной текстовый шрифт
         fid = QFontDatabase.addApplicationFont(str(path))
         fams = QFontDatabase.applicationFontFamilies(fid) if fid >= 0 else []
         if fams and "ui" not in _FAMILIES:
             _FAMILIES["ui"] = "Noto Sans" if "Noto Sans" in fams else fams[0]
-    if "Bahnschrift" in QFontDatabase.families():
+    installed = set(QFontDatabase.families())
+    # Длинный текст — родной шрифт Windows: его отрисовка под экран лучше всех (ClearType).
+    for fam in ("Segoe UI Variable Text", "Segoe UI"):
+        if fam in installed:
+            _FAMILIES["ui"] = fam
+            break
+    if "Bahnschrift" in installed:
         _FAMILIES["display"] = "Bahnschrift"
 
     # Иероглифов и части значков в этих шрифтах нет — явно говорим Qt, чем их подменять.

@@ -73,14 +73,14 @@ QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
 QFrame#side {{ background: {SIDE}; border-right: 1px solid {LINE}; }}
 QLabel#brand {{ font-family: "{disp}", "{ui}"; font-size: {px(19)}px; font-weight: 700; color: {ACCENT}; letter-spacing: 1px; }}
 QLabel#version {{ color: {MUTED}; font-size: {px(12)}px; }}
-QListWidget#nav {{ background: transparent; border: 0; outline: 0; }}
+QListWidget#nav {{ background: transparent; border: 0; outline: 0; font-family: "{disp}", "{ui}"; font-size: {px(15)}px; }}
 QListWidget#nav::item {{ padding: {px(11)}px {px(14)}px; margin: {px(2)}px {px(10)}px; border-radius: {px(3)}px; color: {MUTED}; }}
 QListWidget#nav::item:hover {{ background: #10202a; color: {TEXT}; }}
 QListWidget#nav::item:selected {{ background: {ACCENT_DIM}; color: {ACCENT}; border-left: {px(3)}px solid {ACCENT}; }}
 
 QLabel#h1 {{ font-family: "{disp}", "{ui}"; font-size: {px(26)}px; font-weight: 600; letter-spacing: 1px; }}
 QLabel#qtitle {{ font-family: "{disp}", "{ui}"; font-size: {px(24)}px; font-weight: 600; }}
-QLabel#h2 {{ font-size: {px(15)}px; font-weight: 600; }}
+QLabel#h2 {{ font-family: "{disp}", "{ui}"; font-size: {px(16)}px; font-weight: 600; letter-spacing: 0.3px; }}
 QLabel#muted {{ color: {MUTED}; font-size: {px(13)}px; }}
 QLabel#value {{ color: {ACCENT}; font-weight: 600; min-width: {px(64)}px; }}
 QLabel#ok {{ color: {DONE}; }}
@@ -90,7 +90,7 @@ QFrame#card {{ background: {CARD}; border: 1px solid {LINE}; border-radius: {px(
 QFrame#card QLabel {{ background: transparent; }}
 QFrame#sep {{ background: {LINE}; max-height: 1px; min-height: 1px; border: 0; }}
 
-QPushButton {{ background: #122330; border: 1px solid {LINE}; border-radius: {px(3)}px; padding: {px(8)}px {px(16)}px; }}
+QPushButton {{ font-family: "{disp}", "{ui}"; font-size: {px(14)}px; font-weight: 600; letter-spacing: 0.3px; background: #122330; border: 1px solid {LINE}; border-radius: {px(3)}px; padding: {px(8)}px {px(16)}px; }}
 QPushButton:hover {{ background: #183040; }}
 QPushButton:pressed {{ background: #0f1e28; }}
 QPushButton:disabled {{ color: #4c5c66; background: #0c171e; }}

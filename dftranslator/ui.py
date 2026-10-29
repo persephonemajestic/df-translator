@@ -62,11 +62,15 @@ class OverlayWindow(QWidget):
         self._timer.timeout.connect(self.clear)
 
     def _font(self, px: int) -> QFont:
-        from .fonts import ui_family
+        """Перевод поверх игры — Bahnschrift (DIN, как в самой Delta Force): узкий, поэтому длинный
+        русский текст влезает на место китайского. Крупные надписи — полужирные, мелкие — средние."""
+        from .fonts import display_family
 
-        f = QFont(ui_family())
+        f = QFont(display_family())
         f.setPixelSize(px)
-        f.setWeight(QFont.Weight.Medium)
+        f.setWeight(QFont.Weight.DemiBold if px >= 18 else QFont.Weight.Medium)
+        f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.2 if px < 16 else 0.4)
+        f.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
         return f
 
     def _measure(self, text: str, font_px: int, max_w: int) -> tuple[int, int]:
@@ -129,16 +133,26 @@ class OverlayWindow(QWidget):
         """Плашка цвета фона закрывает оригинал, поверх — перевод цветом оригинального текста."""
         a = 255  # китайский текст закрываем полностью, иначе он просвечивает сквозь перевод
         del alpha
+        p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
         for it in self.placed:
             rect = QRect(it.x, it.y, it.w, it.h)
             bg = it.bg or (16, 18, 24)
             p.setPen(Qt.PenStyle.NoPen)
+            # мягкий край: плашка растворяется в фоне игры, а не выглядит вырезанным прямоугольником
+            for grow, fade in ((3, 40), (2, 90), (1, 170)):
+                p.setBrush(QColor(bg[0], bg[1], bg[2], fade))
+                p.drawRoundedRect(rect.adjusted(-grow, -grow, grow, grow), 3 + grow, 3 + grow)
             p.setBrush(QColor(bg[0], bg[1], bg[2], a))
             p.drawRoundedRect(rect, 3, 3)
             fg = readable_fg(it.bg, it.fg)
             p.setFont(self._font(it.font_px))
+            text_rect = rect.adjusted(2, 0, -2, 0)
+            light_text = (0.299 * fg[0] + 0.587 * fg[1] + 0.114 * fg[2]) > 140
+            if light_text:  # тень под светлыми буквами — как у игрового текста, читается на любом фоне
+                p.setPen(QColor(0, 0, 0, 150))
+                p.drawText(text_rect.translated(0, 1), INPLACE_FLAGS, it.text)
             p.setPen(QColor(*fg))
-            p.drawText(rect.adjusted(2, 0, -2, 0), INPLACE_FLAGS, it.text)
+            p.drawText(text_rect, INPLACE_FLAGS, it.text)
             if d.get("show_source_dots", True) and not it.lore:
                 p.setPen(Qt.PenStyle.NoPen)  # жёлтая точка только у машинного перевода — проверяйте по смыслу
                 p.setBrush(MACHINE_DOT)
