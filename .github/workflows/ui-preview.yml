@@ -37,7 +37,7 @@ jobs:
           QT_QPA_FONTDIR: C:\Windows\Fonts
         shell: bash
         run: |
-          python -X faulthandler -m pytest tests -v -rs -k "not full_app and not ocr" --junitxml=junit.xml > test.log 2>&1 || echo "pytest exit $?" >> test.log
+          python -X faulthandler -m pytest tests -v -rs --junitxml=junit.xml > test.log 2>&1 || echo "pytest exit $?" >> test.log
           python -c "import xml.etree.ElementTree as E;r=E.parse('junit.xml').getroot();s=r if r.tag=='testsuite' else r[0];print('tests',s.get('tests'),'failures',s.get('failures'),'errors',s.get('errors'))" | tee -a test.log
       - name: Снимки
         if: always()
