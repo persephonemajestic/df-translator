@@ -149,10 +149,11 @@ def place_inplace(
             one = measure(it.ru, font, 100000)[0] + 2 * pad + 2
             if x + one <= right0 and measure(it.ru, font, 100000)[1] <= h - 2 * pad + max(1, font // 5):
                 w = one
-        # 1) уменьшаем шрифт, но не ниже 70% от размера оригинала (иначе нечитаемо — лучше расширить)
+        # 1) чуть уменьшаем шрифт (до 85% оригинала) — дальше лучше расширить или перенести строку
         floor = max(min_font, int(font * 0.7))
+        soft = max(floor, int(font * 0.85))
         f = font
-        while f > floor and not fits(w, h, f):
+        while f > soft and not fits(w, h, f):
             f -= 1
         if not fits(w, h, f):
             # 2) вправо до соседа на той же высоте, края панели или экрана
@@ -163,20 +164,21 @@ def place_inplace(
             one_line_w = measure(it.ru, f, 100000)[0] + 2 * pad + 2
             w = max(w, min(right - x, one_line_w))
             if not fits(w, h, f):
-                # 3) вниз до соседа ниже
-                _, th = measure(it.ru, f, inner(w))
-                need = th + 2 * pad
+                # 3) вниз — перенос на следующую строку тем же шрифтом, если под надписью свободно
                 bottom = int(it.room_bottom) if it.room_bottom else screen_h
                 for o in others:
                     if o[0] < x + w and o[0] + o[2] > x and o[1] >= y + h - 2:
                         bottom = min(bottom, o[1] - 2)
-                h = max(h, min(need, bottom - y))
-                # 4) всё ещё не влезло — уменьшаем шрифт до минимума
-                while f > min_font and not fits(w, h, f):
-                    f -= 1
-                if not fits(w, h, f):  # места нет совсем — текст важнее соседей
+                room = max(h, bottom - y)
+                _, th = measure(it.ru, f, inner(w))
+                if th + 2 * pad <= room:
+                    h = max(h, th + 2 * pad)
+                else:
+                    # 4) места мало — уменьшаем шрифт (сначала до 70%, потом до минимума)
+                    while f > min_font and measure(it.ru, f, inner(w))[1] + 2 * pad > room:
+                        f -= 1
                     _, th = measure(it.ru, f, inner(w))
-                    h = th + 2 * pad
+                    h = max(h, th + 2 * pad)   # если места нет совсем — текст важнее соседей
         w = min(w, screen_w - x)
         if y + h > screen_h:
             y = max(0, screen_h - h)
