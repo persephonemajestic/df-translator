@@ -400,6 +400,9 @@ QLabel#unlock {{ color: #e9a23b; font-size: {px(12)}px; }}
 """
 
 
+TEXT_COLOR = "#ece7dc"
+
+
 class QuestBrowser(QWidget):
     """Справочник как в игре: слева отделы и этапы сезона, в середине ветки и задания, справа карточка.
 
@@ -421,6 +424,8 @@ class QuestBrowser(QWidget):
         # Отмеченные сейчас задания не исчезают сразу — остаются серыми, пока не смените раздел.
         self._keep: set[str] = set()
         self._refresh_pending = False
+        self._rows: list = []
+        self._rows_key = None
         self.setStyleSheet(browser_qss())
 
         root = QHBoxLayout(self)
@@ -468,7 +473,7 @@ class QuestBrowser(QWidget):
         hide_row.addWidget(label("Скрывать выполненные", "muted"), 1)
         self.hide_done = Switch(True)
         self.hide_done.setToolTip("Выполненные задания прячутся, закрытые ветки сворачиваются в серую строку")
-        self.hide_done.toggled.connect(lambda _v: self.rebuild())
+        self.hide_done.toggled.connect(lambda _v: self._refresh_now())
         hide_row.addWidget(self.hide_done)
         mid.addLayout(hide_row)
         self.unlock = label("", "unlock", wrap=True)
@@ -683,9 +688,8 @@ class QuestBrowser(QWidget):
         self.tree.blockSignals(True)
         self.tree.setUpdatesEnabled(False)
         self.tree.setCurrentItem(None)
+        self._rows = []   # старые строки сейчас будут удалены — не держим на них ссылок
         self.tree.clear()
-        grey = QBrush(QColor("#66717c"))
-        total = done_total = 0
         searching = bool(self.search.text().strip())
         unlock = ""
         if self.section.startswith("season:") and not searching and hasattr(self.db, "stage_unlock"):
@@ -693,11 +697,10 @@ class QuestBrowser(QWidget):
         self.unlock.setText("🔓 " + unlock if unlock else "")
         self.unlock.setVisible(bool(unlock) and self.height() >= px(480))
         self.combo.setToolTip(unlock or "Раздел: отдел или этап сезона")
+        self._rows = []   # (строка ветки, заголовок, [(строка задания, квест)])
+        self._rows_key = (self.section, self.search.text().strip())
         for title, items in self._groups():
-            done_ids = [q.id for q in items if self.progress.is_done(q.id)]
-            closed = bool(items) and len(done_ids) == len(items)
-            just_closed = closed and any(q.id in self._keep for q in items)
-            g = QTreeWidgetItem([f"{'✓ ' if closed else ''}{title}   {len(done_ids)}/{len(items)}"])
+            g = QTreeWidgetItem([title])
             f = QFont(g.font(0))
             f.setBold(True)
             g.setFont(0, f)
@@ -708,13 +711,9 @@ class QuestBrowser(QWidget):
                 if info.get("goal"):
                     tip = f"{info['goal']}\n{tip}"
             g.setToolTip(0, f"{title}\n{tip}")
-            if closed:
-                g.setForeground(0, grey)
             self.tree.addTopLevelItem(g)
+            rows = []
             for q in items:
-                done = self.progress.is_done(q.id)
-                total += 1
-                done_total += done
                 sub = q.name
                 if searching:
                     sub += " · " + (f"Сезон {q.line}" if q.dept == "season" and q.line != "main"
@@ -730,23 +729,56 @@ class QuestBrowser(QWidget):
                 it = QTreeWidgetItem([f"{q.name_ru or q.name}\n{sub}"])
                 it.setData(0, Qt.ItemDataRole.UserRole, q.id)
                 it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-                it.setCheckState(0, Qt.CheckState.Checked if done else Qt.CheckState.Unchecked)
                 it.setToolTip(0, f"{q.name_ru or q.name}\n{q.name}\nГалочка — задание выполнено")
-                if done:
-                    it.setForeground(0, grey)
-                    fnt = QFont(it.font(0))
-                    fnt.setStrikeOut(True)
-                    it.setFont(0, fnt)
                 g.addChild(it)
-                it.setHidden(done and hide and not searching and q.id not in self._keep)
-            g.setExpanded(not (closed and hide and not just_closed) or searching)
+                rows.append((it, q))
+            self._rows.append((g, title, rows))
+        self._apply_states(first=True)
         self.tree.setUpdatesEnabled(True)
         self.tree.blockSignals(False)
         self._building = False
-        self.stats.setText(f"Выполнено: {done_total} из {total}")
-        self._update_rail()
         if keep:
             self._select_item(keep)
+
+    def _apply_states(self, first: bool = False) -> None:
+        """Галочки, серый цвет, скрытие и счётчики — без пересоздания строк.
+
+        Отметка задания больше не пересобирает список: строки остаются теми же объектами,
+        меняется только их вид (быстро, без прыжков прокрутки и без вылетов)."""
+        from PySide6.QtGui import QBrush, QColor, QFont
+
+        hide = self.hide_done.isChecked()
+        searching = bool(self.search.text().strip())
+        grey, normal = QBrush(QColor("#66717c")), QBrush(QColor(TEXT_COLOR))
+        was = self.tree.signalsBlocked()
+        self.tree.blockSignals(True)
+        self._building = True
+        total = done_total = 0
+        try:
+            for g, title, rows in self._rows:
+                done_n = 0
+                for it, q in rows:
+                    done = self.progress.is_done(q.id)
+                    done_n += done
+                    it.setCheckState(0, Qt.CheckState.Checked if done else Qt.CheckState.Unchecked)
+                    it.setForeground(0, grey if done else normal)
+                    fnt = QFont(it.font(0))
+                    fnt.setStrikeOut(done)
+                    it.setFont(0, fnt)
+                    it.setHidden(done and hide and not searching and q.id not in self._keep)
+                total += len(rows)
+                done_total += done_n
+                closed = bool(rows) and done_n == len(rows)
+                just_closed = closed and any(q.id in self._keep for _it, q in rows)
+                g.setText(0, f"{'✓ ' if closed else ''}{title}   {done_n}/{len(rows)}")
+                g.setForeground(0, grey if closed else normal)
+                if first or closed:
+                    g.setExpanded(not (closed and hide and not just_closed) or searching)
+        finally:
+            self._building = False
+            self.tree.blockSignals(was)
+        self.stats.setText(f"Выполнено: {done_total} из {total}")
+        self._update_rail()
 
     def _select_item(self, quest_id: str) -> bool:
         from PySide6.QtWidgets import QTreeWidgetItemIterator
@@ -809,19 +841,13 @@ class QuestBrowser(QWidget):
         QTimer.singleShot(0, self._sync_from_tree)
 
     def _sync_from_tree(self) -> None:
-        from PySide6.QtWidgets import QTreeWidgetItemIterator
-
         self._sync_pending = False
         on, off = [], []
-        itr = QTreeWidgetItemIterator(self.tree)
-        while itr.value():
-            it = itr.value()
-            qid = it.data(0, Qt.ItemDataRole.UserRole)
-            if qid:
+        for _g, _title, rows in getattr(self, "_rows", []):
+            for it, q in rows:
                 checked = it.checkState(0) == Qt.CheckState.Checked
-                if checked != self.progress.is_done(qid):
-                    (on if checked else off).append(qid)
-            itr += 1
+                if checked != self.progress.is_done(q.id):
+                    (on if checked else off).append(q.id)
         if on:
             self._keep.update(on)
             self.progress.set_many(on, True)
@@ -840,6 +866,9 @@ class QuestBrowser(QWidget):
 
     def _refresh_now(self) -> None:
         self._refresh_pending = False
-        self.rebuild()
+        if self._rows_key == (self.section, self.search.text().strip()) and self._rows:
+            self._apply_states()
+        else:
+            self.rebuild()
         if self.card.quest is not None:
             self.card.show_quest(self.card.quest)

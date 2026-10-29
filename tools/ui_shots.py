@@ -89,7 +89,11 @@ def ingame_shot():
     p.fillRect(0, 0, W, 64, QColor(22, 24, 26))
     p.fillRect(60, 110, 520, 520, QColor(18, 22, 26, 255))
     p.fillRect(640, 110, 580, 300, QColor(196, 176, 128))
-    f = QFont("Microsoft YaHei")
+    from PySide6.QtGui import QFontDatabase
+
+    fid = QFontDatabase.addApplicationFont("C:/Windows/Fonts/msyh.ttc")
+    fams = QFontDatabase.applicationFontFamilies(fid) if fid >= 0 else []
+    f = QFont(fams[0] if fams else "Microsoft YaHei")
     def text(x, y, s, size, color):
         f.setPixelSize(size)
         p.setFont(f)
