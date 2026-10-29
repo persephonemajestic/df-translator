@@ -72,6 +72,8 @@ QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
 
 QFrame#side {{ background: {SIDE}; border-right: 1px solid {LINE}; }}
 QLabel#brand {{ font-family: "{disp}", "{ui}"; font-size: {px(19)}px; font-weight: 700; color: {ACCENT}; letter-spacing: 1px; }}
+QLabel#byline {{ color: {MUTED}; font-family: "{disp}", "{ui}"; font-size: {px(13)}px; letter-spacing: 0.5px;
+  padding-left: {px(34)}px; }}
 QLabel#version {{ color: {MUTED}; font-size: {px(12)}px; }}
 QListWidget#nav {{ background: transparent; border: 0; outline: 0; font-family: "{disp}", "{ui}"; font-size: {px(15)}px; }}
 QListWidget#nav::item {{ padding: {px(11)}px {px(14)}px; margin: {px(2)}px {px(10)}px; border-radius: {px(3)}px; color: {MUTED}; }}
@@ -533,11 +535,15 @@ class SettingsWindow(QWidget):
         sl = QVBoxLayout(side)
         sl.setContentsMargins(0, px(22), 0, px(16))
         sl.setSpacing(0)
-        brand = QHBoxLayout()
+        brand = QVBoxLayout()
         brand.setContentsMargins(px(22), 0, px(16), px(18))
         self.brand_label = label("", "brand")
         self.brand_label.setTextFormat(Qt.TextFormat.RichText)
         brand.addWidget(self.brand_label)
+        self.byline = label("by LastNova", "byline")   # подпись автора под названием
+        self.byline.setToolTip(f"{CREDIT}\nВопросы: Discord-чат или Telegram @{TELEGRAM}")
+        brand.setSpacing(px(2))
+        brand.addWidget(self.byline)
         self.brand_box = brand
         sl.addLayout(brand)
         self.nav = QListWidget()
@@ -608,7 +614,8 @@ class SettingsWindow(QWidget):
             glyph = f"<span style=\"font-family:'{ui_family()}','Microsoft YaHei UI';\">译</span>"
             self.brand_label.setText(glyph if compact else f"{glyph}&nbsp;&nbsp;DF Translator")
             self.brand_box.setContentsMargins(px(22) if not compact else px(20), 0, px(16) if not compact else 0, px(18))
-            self.ver_label.setText(__version__ if compact else f"v{__version__} · by LastNova")
+            self.ver_label.setText(__version__ if compact else f"v{__version__}")
+            self.byline.setVisible(not compact)
             self.nav.setStyleSheet(
                 f"QListWidget#nav::item {{ padding: {px(9)}px 0; margin: {px(2)}px {px(8)}px; }}" if compact else "")
             for i, t in enumerate(self.nav_texts):
