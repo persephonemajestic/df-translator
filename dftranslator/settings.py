@@ -382,6 +382,7 @@ class KeyCaps(QWidget):
         self.lay = QHBoxLayout(self)
         self.lay.setContentsMargins(0, 0, 0, 0)
         self.lay.setSpacing(px(4))
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.set_spec(spec)
 
     def set_spec(self, spec: str) -> None:
@@ -534,7 +535,8 @@ class SettingsWindow(QWidget):
         sl.setSpacing(0)
         brand = QHBoxLayout()
         brand.setContentsMargins(px(22), 0, px(16), px(18))
-        self.brand_label = label("译  DF Translator", "brand")
+        self.brand_label = label("", "brand")
+        self.brand_label.setTextFormat(Qt.TextFormat.RichText)
         brand.addWidget(self.brand_label)
         self.brand_box = brand
         sl.addLayout(brand)
@@ -546,13 +548,13 @@ class SettingsWindow(QWidget):
         self.history = None
         pages = [
             ("home", "⌂   Главная", "Быстрые действия и все горячие клавиши", self._page_home),
-            ("quests", "☰   Квесты", "Все задания отделов: цели, награды, скриншоты мест", self._page_quests),
+            ("quests", "≡   Квесты", "Все задания отделов: цели, награды, скриншоты мест", self._page_quests),
             ("history", "↺   История", "Последние переводы — скопировать или исправить", self._page_history),
-            ("hotkeys", "⌨   Горячие клавиши", "Изменить сочетания клавиш", self._page_hotkeys),
+            ("hotkeys", "⇧   Горячие клавиши", "Изменить сочетания клавиш", self._page_hotkeys),
             ("engine", "文   Перевод", "Движок перевода и ключи", self._page_engine),
             ("display", "◐   Отображение", "Вид плашек с переводом", self._page_display),
             ("ocr", "◎   Распознавание", "Настройки OCR", self._page_ocr),
-            ("updates", "⟳   Обновления", "Проверка и установка новых версий", self._page_updates),
+            ("updates", "↻   Обновления", "Проверка и установка новых версий", self._page_updates),
             ("about", "ⓘ   О программе", "Автозапуск, глоссарий, античит", self._page_about),
         ]
         self.page_index = {key: i for i, (key, *_rest) in enumerate(pages)}
@@ -602,7 +604,9 @@ class SettingsWindow(QWidget):
         if compact != self._compact:
             self._compact = compact
             self.side.setFixedWidth(px(64) if compact else px(220))
-            self.brand_label.setText("译" if compact else "译  DF Translator")
+            from .fonts import ui_family
+            glyph = f"<span style=\"font-family:'{ui_family()}','Microsoft YaHei UI';\">译</span>"
+            self.brand_label.setText(glyph if compact else f"{glyph}&nbsp;&nbsp;DF Translator")
             self.brand_box.setContentsMargins(px(22) if not compact else px(20), 0, px(16) if not compact else 0, px(18))
             self.ver_label.setText(__version__ if compact else f"v{__version__} · by LastNova")
             self.nav.setStyleSheet(
@@ -761,8 +765,8 @@ class SettingsWindow(QWidget):
             kcp = KeyCaps()
             kcp.setToolTip(hint)
             self.home_keys[name] = kcp
-            grid.addWidget(lb, i, 0)
-            grid.addWidget(kcp, i, 1)
+            grid.addWidget(lb, i, 0, Qt.AlignmentFlag.AlignVCenter)
+            grid.addWidget(kcp, i, 1, Qt.AlignmentFlag.AlignVCenter)
         grid.setColumnStretch(1, 1)
         kl.addLayout(grid)
         lay.addWidget(kc)
